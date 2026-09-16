@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>协同工作台 · 入口</title>
+<style>
+  :root { --bg:#f7f8fa; --card:#fff; --line:#e3e6eb; --ink:#1f2329; --mut:#8a919f; --acc:#3b82f6; }
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
+         background:radial-gradient(circle at 30% 20%, #eef3ff, transparent 50%),
+                    radial-gradient(circle at 80% 80%, #edf7f0, transparent 50%), var(--bg);
+         font:15px/1.7 system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+         color:var(--ink); }
+  .wrap { max-width:860px; width:92%; padding:40px 0; }
+  h1 { font-size:26px; font-weight:700; margin:0 0 6px; }
+  .sub { color:var(--mut); margin-bottom:30px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:16px; }
+  .app { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:22px;
+         text-decoration:none; color:inherit; display:block; transition:all .18s; }
+  .app:hover { transform:translateY(-3px); box-shadow:0 12px 28px rgba(20,30,60,.10); border-color:#c9d6ef; }
+  .app .em { font-size:30px; }
+  .app h2 { margin:10px 0 6px; font-size:17px; }
+  .app p { margin:0; color:var(--mut); font-size:13px; }
+  .so { margin-top:14px; font-size:11px; color:#aab1bd; }
+  .stage { display:inline-block; padding:2px 8px; border-radius:99px; background:#e8f0fe; color:var(--acc);
+           font-size:11px; margin-left:6px; vertical-align:2px; }
+  .stage.done { background:#e6f7ec; color:#1a9e4b; }
+  .stage.coming { background:#f4f5f7; color:#aab1bd; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>协同工作台 <span class="stage done">运行中</span></h1>
+  <p class="sub">基于自研协同引擎（Lamport 时钟 + LWW 合并）的多人实时协作应用 · M2 前段</p>
+  <div class="grid">
+    <a class="app" href="/editor.html">
+      <div class="em">📝</div>
+      <h2>协同文档</h2>
+      <p>段落级实时编辑：输入、回车分段、删段、标题同步</p>
+      <div class="so">/editor.html · 完成（T0+5）</div>
+    </a>
+    <a class="app" href="/board.html">
+      <div class="em">🧱</div>
+      <h2>协同白板</h2>
+      <p>卡片拖拽 / 缩放 / 文字，几何字段走引擎合并</p>
+      <div class="so">/board.html · 完成（T0+6）</div>
+    </a>
+    <a class="app" href="/collab.html">
+      <div class="em">⚡</div>
+      <h2>实时演示（旧）</h2>
+      <p>最早的双窗口打字演示页（协议 v1 验证）</p>
+      <div class="so">/collab.html · 完成（T0+3）</div>
+    </a>
+  </div>
+  <div class="so" style="margin-top:26px">
+    💡 体验方式：开两个标签页进入同一应用，一边输入/拖拽，另一边实时同步；
+    刷新或拔网重连后增量补回；重启后端服务数据也不丢（MySQL 持久化）。
+    <br>5173 为 Vue 前端脚手架（占位），当前页面由后端 8080 直接托管。
+  </div>
+</div>
+</body>
+</html>
