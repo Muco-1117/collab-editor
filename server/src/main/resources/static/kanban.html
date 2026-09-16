@@ -57,7 +57,7 @@
   <h1>协同看板<span class="tag">T0+7 · 列与卡片拖拽实时同步</span></h1>
   <button class="btn" onclick="newBoard()">＋ 新建看板</button>
   <select class="btn" id="docSel" onchange="connect(this.value)"></select>
-  <button class="btn primary" id="addColBtn" onclick="addColumn()" disabled>＋ 添加列</button>
+  <button class="btn primary" id="addColBtn" onclick="btnColumn()" disabled>＋ 添加列</button>
   <span class="tag" id="meTag"></span>
 </header>
 <div id="board">
@@ -123,7 +123,8 @@ function render(snap) {
   });
   reorderAll();
   $('hint').style.display = cols.size ? 'none' : 'block';
-  $('addColBtn').style.display = cols.size ? '' : 'none';
+  $('addColBtn').style.display = '';
+  $('addColBtn').disabled = false;   // 空板也可建首列（T0+11 修复：原逻辑空板隐藏按钮导致无法建首列）
   refreshList();
 }
 function unpack(fields) {
