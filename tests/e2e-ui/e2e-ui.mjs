@@ -45,21 +45,15 @@ async function newUser(page, uname) {
   await A.screenshot({ path: ART + '/1-home-a.png' });
 
   // ── 2. A 创建空间 + 邀请 B + 新建文档 ───────────────────────
-    await A.fill('#spName', '双窗口验证空间');
-    await A.click('#spCreate');
-    await A.waitForSelector('#spList', { timeout: 8000 });
-    // 邀请 B（A 页面上以 A 的 token 调邀请 API）
-    const invited = await A.evaluate(async ub => {
-      const list = await (await fetch('/api/spaces', { headers: { Authorization: 'Bearer ' + window.auth.token() } })).json();
-      const sp = list.find(s => s.name === '双窗口验证空间');
-          if (!sp) return false;
-          const r = await fetch('/api/spaces/' + sp.id + '/members', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + window.auth.token() },
-        body: JSON.stringify({ username: ub, role: 'editor' }),
-      });
-      return r.ok;
-    }, ub);
-    step('2 A 建空间并邀请 B', invited === true, ub);
+      await A.fill('#spName', '双窗口验证空间');
+      await A.click('#spCreate');
+      await A.waitForFunction(() => [...document.querySelectorAll('#spList > div')].some(c => c.textContent.includes('双窗口验证空间')), null, { timeout: 8000 });
+      // 通过空间卡片上的「邀请成员」输入框邀请 B（真实 UI 路径）
+      const invCard = A.locator('#spList > div').filter({ hasText: '双窗口验证空间' });
+      await invCard.locator('input').fill(ub);
+      await invCard.locator('button:has-text("邀请")').click();
+      await A.waitForFunction(() => [...document.querySelectorAll('#spList > div')].some(c => c.textContent.includes('双窗口验证空间') && c.textContent.includes('2 成员')), null, { timeout: 8000 });
+      step('2 A 建空间并通过界面上邀请成员 B', true, ub);
     await A.click('#spList a[href="/editor.html"]');      // 一键进文档应用
     await A.waitForURL(/\/editor\.html/, { timeout: 10000 });
     await A.click('button:has-text("＋ 新建文档")');       // prompt 自动填标题

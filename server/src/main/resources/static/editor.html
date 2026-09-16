@@ -49,9 +49,8 @@
 </head>
 <body>
 <header>
-  <h1>协同文档<span class="tag">T0+5 · 段落级实时编辑</span></h1>
+  <h1>协同文档 <span class="tag">实时协同编辑</span></h1>
   <button class="btn primary" onclick="newDoc()">＋ 新建文档</button>
-  <button class="btn" onclick="openDemo()">演示剧本</button>
   <button class="btn" onclick="showHistory()" title="版本历史：时间线回放与恢复">📜 历史</button>
   <button class="btn" onclick="exportMd()" title="导出为 Markdown">⬇ 导出</button>
   <span class="tag" id="meTag"></span>
@@ -355,12 +354,6 @@ function newDoc() {
     .then(r => r.json())
     .then(d => { refreshDocs(); connect(d.docKey); });
 }
-async function openDemo() {
-  const r = await api('/api/docs', { method: 'POST', body: JSON.stringify({ title: '演示文档-协同' }) });
-  const d = await r.json();
-  refreshDocs();
-  connect(d.docKey);
-}
 function showEmpty() {
   if (ws) { ws.onclose = null; ws.close(); ws = null; }
   curDoc = null;
@@ -373,7 +366,7 @@ function showEmpty() {
 const bootQ = new URLSearchParams(location.search).get('doc');
 $('meTag').textContent = '本端 ' + me.slice(0, 6);
 refreshDocs();
-log('编辑器就绪（T0+5）');
+log('编辑器就绪，请登录后新建或打开文档');
 if (bootQ) connect(bootQ);
 
 /* ================= 历史/导出（T0+10） ================= */

@@ -61,31 +61,24 @@
       <div class="em">📝</div>
       <h2>协同文档</h2>
       <p>段落级实时编辑：输入、回车分段、删段、标题同步</p>
-      <div class="so">/editor.html · 完成（T0+5）</div>
+      <div class="so">版本历史 · 一键回退 · Markdown 导出</div>
     </a>
     <a class="app" href="/board.html">
       <div class="em">🧱</div>
       <h2>协同白板</h2>
       <p>卡片拖拽 / 缩放 / 文字，几何字段走引擎合并</p>
-      <div class="so">/board.html · 完成（T0+6）</div>
+      <div class="so">坐标实时同步</div>
     </a>
     <a class="app" href="/kanban.html">
       <div class="em">🗂</div>
       <h2>协同看板</h2>
       <p>列表列 + 卡片，拖拽换列排序，column 字段走引擎合并</p>
-      <div class="so">/kanban.html · 完成（T0+7）</div>
-    </a>
-    <a class="app" href="/collab.html">
-      <div class="em">⚡</div>
-      <h2>实时演示（旧）</h2>
-      <p>最早的双窗口打字演示页（协议 v1 验证）</p>
-      <div class="so">/collab.html · 完成（T0+3）</div>
+      <div class="so">跨列拖拽实时同步</div>
     </a>
   </div>
   <div class="so" style="margin-top:26px">
     💡 体验方式：先<a href="/login.html" style="color:var(--acc)">登录</a>，然后开两个标签页进入同一应用，一边输入/拖拽，另一边实时同步；
     刷新或拔网重连后增量补回；重启后端服务数据也不丢（MySQL 持久化）。
-    <br>5173 为 Vue 前端脚手架（占位），当前页面由后端 8080 直接托管。
   </div>
 </div>
 <script>
@@ -101,17 +94,33 @@
       if (!spaces.length) { box.innerHTML = '<span class="so">还没有空间——创建第一个吧</span>'; return; }
       spaces.forEach(s => {
         const card = document.createElement('div');
-        card.style.cssText = 'border:1px solid var(--line); border-radius:10px; padding:10px 14px; min-width:190px;';
+        card.style.cssText = 'border:1px solid var(--line); border-radius:10px; padding:10px 14px; min-width:210px;';
         card.innerHTML = '<div><b>' + s.name + '</b> <span class="so">' + (s.my_role || '') + '</span></div>'
           + '<div class="so" style="margin:4px 0 8px">' + s.doc_count + ' 文档 · ' + s.member_count + ' 成员</div>'
           + '<a class="button" href="/editor.html" style="margin-right:6px">文档</a>'
           + '<a class="button" href="/board.html" style="margin-right:6px">白板</a>'
-          + '<a class="button" href="/kanban.html">看板</a>';
+          + '<a class="button" href="/kanban.html">看板</a>'
+          + (s.my_role === 'admin'
+              ? '<div class="so" style="margin-top:8px">邀请成员：'
+                + '<input placeholder="用户名" style="width:110px; padding:3px 8px; border:1px solid var(--line); border-radius:6px; font-size:12px;">'
+                + ' <button class="button" style="padding:3px 10px; font-size:12px">邀请</button></div>'
+              : '');
         card.querySelectorAll('a').forEach(a => a.addEventListener('click', e => {
           e.preventDefault();
           sessionStorage.setItem('collab_space', String(s.id));
           location.href = a.getAttribute('href');
         }));
+        const invBtn = card.querySelector('button');
+        if (invBtn) invBtn.onclick = async () => {
+          const uname = invBtn.parentElement.querySelector('input').value.trim();
+          if (!uname) { alert('请输入要邀请的用户名'); return; }
+          const r = await fetch('/api/spaces/' + s.id + '/members', {
+            method: 'POST', headers: spHeaders(window.auth.token()), body: JSON.stringify({ username: uname }),
+          });
+          const j = await r.json();
+          alert(r.ok ? '已邀请 ' + uname : (j.msg || '邀请失败'));
+          if (r.ok) loadSpaces();
+        };
         box.appendChild(card);
       });
     } catch (e) { box.innerHTML = '<span class="so">空间列表加载失败</span>'; }
