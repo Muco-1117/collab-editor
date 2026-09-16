@@ -61,7 +61,8 @@ class CollabPersistRestoreTest {
         }
         long revBefore = first.currentRev();
         String hashBefore = first.state().canonicalHash();
-        assertEquals(74, revBefore, "rev=操作总数");
+        // 74 条业务 op + 4 条空文档种子（doc-root/标题/首段/order）
+        assertEquals(78, revBefore, "rev=种子4+操作74");
         String snapCount = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM element_snapshot WHERE doc_id=?", String.class, doc);
         assertTrue(Integer.parseInt(snapCount) >= 1, "快照已落库（rev=64 阈值已触发）");

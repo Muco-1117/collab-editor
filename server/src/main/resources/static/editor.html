@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>协同工作台 · 文档</title>
+<style>
+  :root { --bg:#f7f8fa; --card:#fff; --line:#e3e6eb; --ink:#1f2329; --mut:#8a919f; --acc:#3b82f6; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.7 system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+         background:var(--bg); color:var(--ink); }
+  header { display:flex; align-items:center; gap:12px; padding:10px 20px; background:var(--card);
+           border-bottom:1px solid var(--line); }
+  header h1 { font-size:16px; margin:0; font-weight:600; }
+  .tag { font-size:12px; color:var(--mut); }
+  .btn { border:1px solid var(--line); background:#fff; border-radius:6px; padding:5px 12px;
+         cursor:pointer; font-size:13px; }
+  .btn.primary { background:var(--acc); border-color:var(--acc); color:#fff; }
+  .btn:hover { opacity:.88; }
+  #wrap { display:flex; height:calc(100vh - 50px); }
+  #side { width:260px; border-right:1px solid var(--line); background:var(--card);
+          overflow:auto; padding:12px; }
+  #side h2 { font-size:13px; color:var(--mut); margin:0 0 8px; font-weight:500; }
+  .doc-item { padding:8px 10px; border-radius:6px; cursor:pointer; display:flex;
+              justify-content:space-between; align-items:center; gap:6px; }
+  .doc-item:hover { background:#f2f4f7; }
+  .doc-item.active { background:#e8f0fe; color:var(--acc); font-weight:600; }
+  .doc-item .del { visibility:hidden; border:0; background:none; color:var(--mut);
+                   cursor:pointer; font-size:15px; padding:0 2px; }
+  .doc-item:hover .del { visibility:visible; }
+  .doc-item .del:hover { color:#e5484d; }
+  #main { flex:1; overflow:auto; padding:28px 18px; }
+  #editor { max-width:760px; margin:0 auto; background:var(--card); border:1px solid var(--line);
+            border-radius:10px; padding:34px 46px; min-height:calc(100vh - 110px); }
+  #title { font-size:26px; font-weight:700; line-height:1.4; outline:none; margin-bottom:16px;
+           min-height:40px; }
+  #title:empty::before, .seg:empty::before { content:attr(data-ph); color:#c3c8d1; }
+  .seg { outline:none; font-size:16px; line-height:1.9; min-height:1.9em; padding:2px 0;
+         border-radius:3px; transition:box-shadow .15s; }
+  .seg:focus { box-shadow:0 1px 0 0 var(--acc); }
+  #status { position:fixed; right:14px; bottom:10px; font-size:12px; color:var(--mut);
+            background:rgba(255,255,255,.9); border:1px solid var(--line); border-radius:8px; padding:4px 10px; }
+  #log { position:fixed; left:14px; bottom:10px; font-size:11px; color:#9aa3b2; max-width:380px;
+         max-height:70px; overflow:auto; background:rgba(255,255,255,.92); border:1px solid var(--line);
+         border-radius:8px; padding:4px 10px; }
+  .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; }
+  .dot.on { background:#23c55e; } .dot.off { background:#e5484d; }
+</style>
+</head>
+<body>
+<header>
+  <h1>协同文档<span class="tag">T0+5 · 段落级实时编辑</span></h1>
+  <button class="btn primary" onclick="newDoc()">＋ 新建文档</button>
+  <button class="btn" onclick="openDemo()">演示剧本</button>
+  <span class="tag" id="meTag"></span>
+</header>
+<div id="wrap">
+  <aside id="side">
+    <h2>文档列表</h2>
+    <div id="docList"></div>
+  </aside>
+  <main id="main">
+    <div id="editor" style="display:none">
+      <div id="title" contenteditable="true" data-ph="（点击输入标题）" spellcheck="false"></div>
+      <div id="segs"></div>
+    </div>
+    <div id="emptyTip" style="display:none;color:var(--mut);text-align:center;padding:90px 0">
+      从左侧选择或新建一个文档
+    </div>
+  </main>
+</div>
+<div id="status"><span class="dot off" id="dot"></span><span id="statText">未连接</span></div>
+<div id="log"></div>
+
+<script>
+'use strict';
+/* ================= 顶层状态 ================= */
+const me = 'c' + Math.random().toString(36).slice(2, 9);
+let ws = null, rev = 0, curDoc = null;
+let lamport = 0;                                   // 本地 Lamport 计数器
+const segs = new Map();                            // eid -> { order, el }
+const clock = () => `${me}:${++lamport}`;
+const $ = id => document.getElementById(id);
+const log = s => { $('log').textContent += '> ' + s + '\n'; $('log').scrollTop = 1e9; };
+const stat = s => $('statText').textContent = s;
+const setDot = on => $('dot').className = 'dot ' + (on ? 'on' : 'off');
+
+/* ================= WebSocket ================= */
+function connect(docKey) {
+  if (ws) { ws.onclose = null; ws.close(); }
+  curDoc = docKey;
+  rev = 0;
+  segs.clear();
+  $('segs').innerHTML = '';
+  $('title').textContent = '';
+  $('editor').style.display = '';
+  $('emptyTip').style.display = 'none';
+  refreshDocs();
+  ws = new WebSocket((location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/ws/collab');
+  ws.onopen = () => { send({ type: 'hello', docId: curDoc, clientId: me, hostname: 'editor', lastRev: 0 }); };
+  ws.onmessage = ev => { try { onMsg(JSON.parse(ev.data)); } catch (e) { log('坏帧: ' + ev.data); } };
+  ws.onclose = () => { setDot(false); stat('已断开'); };
+  ws.onerror = () => log('连接错误');
+}
+function send(o) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); }
+
+function onMsg(m) {
+  switch (m.type) {
+    case 'welcome':
+      setDot(true);
+      renderSnapshot(m.snapshot || []);
+      rev = m.rev;
+      stat('已连接 rev=' + rev);
+      break;
+    case 'incremental':
+      (m.ops || []).forEach(o => { applyRemote(o); });
+      rev = m.rev;
+      stat('增量补发 ' + (m.ops || []).length + ' 条');
+      break;
+    case 'applied':
+      rev = m.rev;
+      if (m.clientId !== me) applyRemote(m.op);
+      break;
+    case 'presence':
+      stat('rev=' + rev + ' · 在线 ' + (m.members || []).length + ' 人');
+      break;
+  }
+}
+
+/* ================= 渲染 ================= */
+function renderSnapshot(snap) {
+  const els = (snap || []).map(el => ({ ...el, fields: unpack(el.fields || {}) })).sort(byOrder);
+  els.forEach(el => {
+    if (el.id === 'doc-root') {
+      $('title').textContent = (el.fields && el.fields.title) || '';
+    } else if (el.type === 'TEXT') {
+      addSegDom(el.id, el.fields);
+    }
+  });
+  refreshDocs();
+}
+// 快照字段形态：name -> {value, clock}（对齐协议规范）
+function unpack(fields) {
+  const out = {};
+  Object.entries(fields).forEach(([k, v]) => { out[k] = v && typeof v === 'object' && 'value' in v ? v.value : v; });
+  return out;
+}
+function byOrder(a, b) {
+  const oa = (a.fields && a.fields.order != null) ? +a.fields.order : 0;
+  const ob = (b.fields && b.fields.order != null) ? +b.fields.order : 0;
+  return oa - ob || (a.id < b.id ? -1 : 1);
+}
+function addSegDom(eid, fields) {
+  let d = document.querySelector('#segs [data-eid="' + eid + '"]');
+  const text = fields.text != null ? String(fields.text) : '';
+  if (!d) {
+    d = document.createElement('div');
+    d.className = 'seg';
+    d.contentEditable = true;
+    d.dataset.eid = eid;
+    d.dataset.ph = '（输入文字 · Enter 分段 · Backspace 删空段）';
+    d.spellcheck = false;
+    bindSeg(d);
+    $('segs').appendChild(d);
+  }
+  if (document.activeElement !== d && d.textContent !== text) d.textContent = text;
+  d.dataset.order = fields.order != null ? fields.order : 0;
+  segs.set(eid, { order: fields.order != null ? +fields.order : 0, el: d });
+  return d;
+}
+
+/* ================= 段落事件 ================= */
+function bindSeg(d) {
+  let composing = false, timer = null;
+  const flush = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => sendPut(d.dataset.eid, 'text', d.textContent), 200);
+  };
+  d.addEventListener('compositionstart', () => composing = true);
+  d.addEventListener('compositionend', () => { composing = false; flush(); });
+  d.addEventListener('input', () => { if (!composing) flush(); });
+  d.addEventListener('keydown', ev => {
+    if (ev.key === 'Enter' && !ev.shiftKey) {
+      ev.preventDefault();
+      splitSeg(d);
+    } else if (ev.key === 'Backspace' && d.textContent === '' && segs.size > 1) {
+      ev.preventDefault();
+      deleteSeg(d);
+    }
+  });
+}
+
+/* Enter：在光标处把段一分为二 */
+function splitSeg(d) {
+  const eid = d.dataset.eid;
+  const text = d.textContent;
+  const caret = getCaret(d);
+  const left = text.slice(0, caret);
+  const right = text.slice(caret);
+  d.textContent = left;
+  sendPut(eid, 'text', left);
+  const newId = 'seg-' + Math.random().toString(36).slice(2, 10);
+  const order = nextOrder(d);
+  send({ type: 'op', docId: curDoc, clientId: me, baseRev: rev,
+         op: { type: 'ADD', elementId: newId, elementType: 'TEXT', clock: clock() } });
+  send({ type: 'op', docId: curDoc, clientId: me, baseRev: rev,
+         op: { type: 'PUT', elementId: newId, elementType: 'TEXT', field: 'order', value: order, clock: clock() } });
+  sendPut(newId, 'text', right);
+  const nd = addSegDom(newId, { order, text: right });
+  reorderDom();
+  nd.focus();
+  placeCaret(nd, 0);
+}
+
+/* ---------- 删除空段 ---------- */
+function deleteSeg(d) {
+  const eid = d.dataset.eid;
+  send({ type: 'op', docId: curDoc, clientId: me, baseRev: rev,
+         op: { type: 'DELETE', elementId: eid, elementType: 'TEXT', clock: clock() } });
+  d.remove();
+  segs.delete(eid);
+  const prev = d.previousElementSibling;
+  if (prev) { prev.focus(); placeCaret(prev, prev.textContent.length); }
+}
+
+/* ---------- 段落排序（有理数 order）---------- */
+function nextOrder(d) {
+  const idx = [...$('segs').children].indexOf(d);
+  const kids = [...$('segs').children];
+  const prev = idx - 1 >= 0 ? +(kids[idx - 1].dataset.order || 0) : 0;
+  const next = idx + 1 < kids.length ? +(kids[idx + 1].dataset.order || 0) : null;
+  return next == null ? prev + 1 : (prev + next) / 2;
+}
+function reorderDom() {
+  [...segs.entries()]
+    .sort((a, b) => a[1].order - b[1].order || (a[0] < b[0] ? -1 : 1))
+    .forEach(([eid]) => { const { el } = segs.get(eid); el.remove(); $('segs').appendChild(el); });
+}
+
+/* ================= 发送 op ================= */
+function sendPut(eid, field, value) {
+  send({ type: 'op', docId: curDoc, clientId: me, baseRev: rev,
+         op: { type: 'PUT', elementId: eid, elementType: 'TEXT', field, value, clock: clock() } });
+}
+
+/* ================= 远端 op ================= */
+function applyRemote(op) {
+  if (op.type === 'DELETE') { deleteEl(op.elementId); return; }
+  if (op.type === 'ADD') { addSegDom(op.elementId, {}); return; }
+  if (op.type === 'PUT') {
+    if (op.elementId === 'doc-root') {
+      if (op.field === 'title' && document.activeElement !== $('title')) $('title').textContent = op.value;
+      return;
+    }
+    const rec = segs.get(op.elementId);
+    if (!rec) return;
+    if (op.field === 'text') {
+      const el = rec.el;
+      if (el === document.activeElement) keepCaret(el, el.textContent, op.value);
+      else el.textContent = op.value;
+    } else if (op.field === 'order') {
+      rec.order = +op.value;
+      rec.el.dataset.order = op.value;
+      reorderDom();
+    }
+  }
+}
+function segEl(eid) { return segs.get(eid) ? segs.get(eid).el : null; }
+function deleteEl(eid) { const s = segs.get(eid); if (s) { s.el.remove(); segs.delete(eid); } }
+function keepCaret(el, oldText, newText) {
+  const oldlen = oldText.length, nlen = newText.length;
+  let pre = 0;
+  while (pre < Math.min(oldlen, nlen) && oldText[pre] === newText[pre]) pre++;
+  let suf = 0;
+  while (suf < Math.min(oldlen - pre, nlen - pre)
+         && oldText[oldlen - 1 - suf] === newText[nlen - 1 - suf]) suf++;
+  const pos = getCaret(el);
+  el.textContent = newText;
+  placeCaret(el, Math.max(pre, Math.min(nlen - suf, pos)));
+}
+
+/* ================= caret 工具 ================= */
+function getCaret(el) {
+  const sel = window.getSelection();
+  if (!sel.rangeCount) return 0;
+  const r = sel.getRangeAt(0);
+  if (r.startContainer === el) return r.startOffset;
+  if (r.startContainer.nodeType === 3) { const t = r.startContainer.nodeValue || ''; return Math.min(r.startOffset, t.length); }
+  return 0;
+}
+function placeCaret(el, pos) {
+  const node = el.firstChild && el.firstChild.nodeType === 3 ? el.firstChild : el;
+  const len = node.nodeType === 3 ? (node.nodeValue || '').length : 0;
+  const range = document.createRange();
+  range.setStart(node, Math.min(pos, len));
+  range.collapse(true);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
+/* ================= 标题 ================= */
+let titleTimer = null;
+$('title').addEventListener('input', () => {
+  clearTimeout(titleTimer);
+  titleTimer = setTimeout(() => {
+    send({ type: 'op', docId: curDoc, clientId: me, baseRev: rev,
+           op: { type: 'PUT', elementId: 'doc-root', elementType: 'DOC', field: 'title',
+                 value: $('title').textContent, clock: clock() } });
+  }, 300);
+});
+
+/* ================= REST：文档 CRUD ================= */
+async function refreshDocs() {
+  try {
+    const r = await fetch('/api/docs');
+    const list = await r.json();
+    $('docList').innerHTML = '';
+    list.forEach(doc => {
+      const it = document.createElement('div');
+      it.className = 'doc-item' + (doc.doc_key === curDoc ? ' active' : '');
+      const nm = document.createElement('span');
+      nm.textContent = doc.title && doc.title !== doc.doc_key ? doc.title : '(未命名 ' + doc.doc_key.slice(0, 8) + ')';
+      nm.className = 'name';
+      nm.onclick = () => connect(doc.doc_key);
+      it.appendChild(nm);
+      const del = document.createElement('button');
+      del.textContent = '✕'; del.className = 'del';
+      del.title = '删除文档与全部内容';
+      del.onclick = async ev => {
+        ev.stopPropagation();
+        if (!confirm('删除该文档及其全部协同数据？')) return;
+        await fetch('/api/docs/' + doc.doc_key, { method: 'DELETE' });
+        if (curDoc === doc.doc_key) showEmpty();
+        refreshDocs();
+      };
+      it.appendChild(del);
+      $('docList').appendChild(it);
+    });
+  } catch (e) { log('REST 列表失败: ' + e); }
+}
+function newDoc() {
+  const t = prompt('新文档标题', '新建文档');
+  if (t === null) return;
+  fetch('/api/docs', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                       body: JSON.stringify({ title: t }) })
+    .then(r => r.json())
+    .then(d => { refreshDocs(); connect(d.docKey); });
+}
+async function openDemo() {
+  const r = await fetch('/api/docs', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                       body: JSON.stringify({ title: '演示文档-协同' }) });
+  const d = await r.json();
+  refreshDocs();
+  connect(d.docKey);
+}
+function showEmpty() {
+  if (ws) { ws.onclose = null; ws.close(); ws = null; }
+  curDoc = null;
+  $('editor').style.display = 'none';
+  $('emptyTip').style.display = '';
+  refreshDocs();
+}
+
+/* ================= boot ================= */
+$('meTag').textContent = '本端 ' + me.slice(0, 6);
+refreshDocs();
+log('编辑器就绪（T0+5）');
+</script>
+</body>
+</html>

@@ -1,6 +1,8 @@
 package com.bishe.server.ws;
 
 import com.bishe.engine.DocState;
+import com.bishe.engine.ElementType;
+import com.bishe.engine.LamportClock;
 import com.bishe.engine.Op;
 import com.bishe.server.store.OpStore;
 import com.bishe.engine.Element;
@@ -25,6 +27,9 @@ public final class CollabRoom {
 
     private static final Logger log = LoggerFactory.getLogger(CollabRoom.class);
     private static final int SNAPSHOT_INTERVAL = 64;
+
+    /** doc-root 元素 id（文档元数据锚点）。 */
+    public static final String ROOT_ID = "doc-root";
 
     private final String docId;
     private final OpStore store;
@@ -58,6 +63,22 @@ public final class CollabRoom {
         if (!tail.isEmpty() || restoredFrom > 0) {
             log.info("恢复房间[{}]：日志回放 [{}..{}]，当前 rev={}", docId, restoredFrom,
                     restoredFrom + tail.size(), revSeq.get());
+        }
+        // —— 空文档种子：doc-root + 首个空段落 ——
+        if (revSeq.get() == 0 && !snap.present()) {
+            long c = 1;
+            String rid = "server:" + docId;
+            Op seedRoot = Op.add(ROOT_ID, ElementType.DOC, new LamportClock(rid, c++));
+            Op seedTitle = Op.put(ROOT_ID, ElementType.DOC, "title",
+                    docId.length() > 8 ? docId.substring(0, 8) : docId, new LamportClock(rid, c++));
+            Op seedSeg = Op.add("seg-root-01", ElementType.TEXT, new LamportClock(rid, c++));
+            Op seedOrder = Op.put("seg-root-01", ElementType.TEXT, "order", 1,
+                    new LamportClock(rid, c++));
+            applyOp(seedRoot);
+            applyOp(seedTitle);
+            applyOp(seedSeg);
+            applyOp(seedOrder);
+            log.info("新文档[{}]：已播种 doc-root + 首个段落（rev={}）", docId, revSeq.get());
         }
     }
 
