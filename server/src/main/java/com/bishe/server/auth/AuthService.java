@@ -21,10 +21,12 @@ public class AuthService {
     private final JdbcTemplate jdbc;
     private final JwtUtil jwt;
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
+    private final com.bishe.server.store.SpaceRepo spaceRepo;
 
-    public AuthService(JdbcTemplate jdbc, JwtUtil jwt) {
+    public AuthService(JdbcTemplate jdbc, JwtUtil jwt, com.bishe.server.store.SpaceRepo spaceRepo) {
         this.jdbc = jdbc;
         this.jwt = jwt;
+        this.spaceRepo = spaceRepo;
     }
 
     /** 注册。用户名已存在 → 抛 IllegalArgumentException("用户名已存在")。 */
@@ -48,7 +50,16 @@ public class AuthService {
             return ps;
         }, kh);
         Number id = kh.getKey();
-        return new UserPub(id == null ? -1 : id.longValue(), username,
+        long uid = id == null ? -1 : id.longValue();
+        // 注册即建默认空间（新用户落地即可建文档/看板，不必先手动建空间）
+        if (uid > 0) {
+            try {
+                spaceRepo.create("我的空间", uid); // create 内部已插入 owner/admin 成员行
+            } catch (Exception ignore) {
+                // 默认空间创建失败不阻断注册
+            }
+        }
+        return new UserPub(uid, username,
                 nickname == null || nickname.isBlank() ? username : nickname, "editor");
     }
 
@@ -74,6 +85,43 @@ public class AuthService {
                 "SELECT id, username, nickname, role FROM `user` WHERE id = ?",
                 (rs, n) -> new UserPub(rs.getLong("id"), rs.getString("username"),
                         rs.getString("nickname"), rs.getString("role")), uid);
+    }
+
+    /** byId 的判空版；用户被删/不存在返回 null。 */
+    public UserPub byIdOrNull(long uid) {
+        try {
+            return byId(uid);
+        } catch (org.springframework.dao.EmptyResultDataAccessException e) {
+            return null;
+        }
+    }
+
+    /** 个人中心聚合：基本信息 + 注册时间 + 我的空间/文档/操作统计。 */
+    public Map<String, Object> profile(long uid) {
+        Map<String, Object> row = jdbc.queryForMap(
+                "SELECT username, nickname, role, created_at FROM `user` WHERE id = ?", uid);
+        long spaces = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM space_member WHERE user_id = ?", Long.class, uid);
+        long docs = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM document d JOIN space_member sm ON sm.space_id = d.space_id WHERE sm.user_id = ?",
+                Long.class, uid);
+        long ops = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM operation_log o JOIN document d ON d.doc_key = o.doc_id " +
+                        "JOIN space_member sm ON sm.space_id = d.space_id WHERE sm.user_id = ?",
+                Long.class, uid);
+        row.put("spaces", spaces);
+        row.put("docs", docs);
+        row.put("ops", ops);
+        return row;
+    }
+
+    /** 修改昵称（1–16 字符，可含中文/字母/数字）。 */
+    public Map<String, Object> updateNickname(long uid, String nickname) {
+        if (nickname == null || nickname.isBlank()) throw new IllegalArgumentException("昵称不能为空");
+        String n = nickname.trim();
+        if (n.length() > 16) throw new IllegalArgumentException("昵称最长 16 字");
+        jdbc.update("UPDATE `user` SET nickname = ? WHERE id = ?", n, uid);
+        return profile(uid);
     }
 
     /** 按用户名查用户；不存在返回 null。 */

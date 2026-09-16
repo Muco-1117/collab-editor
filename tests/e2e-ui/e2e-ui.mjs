@@ -125,6 +125,13 @@ async function newUser(page, uname) {
   await cardB.pressSequentially('（B补卡）', { delay: 10 });
   await A.waitForFunction(() => [...document.querySelectorAll('.card-kanban .body')].some(e => e.textContent.includes('B补卡')), null, { timeout: 8000 });
   step('7c B 补卡实时同步回 A', true);
+  // 7c2 B 新建一张卡（真实双人建卡路径）→ A 同步 +1
+  const nBefore = await B.evaluate(() => document.querySelectorAll('.card-kanban').length);
+  await B.locator('.col').first().locator('.add-card').click();
+  await B.waitForFunction(n => document.querySelectorAll('.card-kanban').length === n + 1, nBefore, { timeout: 6000 });
+  await B.waitForFunction(() => [...document.querySelectorAll('.card-kanban .body')].some(e => e.textContent === ''), null, { timeout: 6000 });
+  const nAfterA = (await A.evaluate(() => document.querySelectorAll('.card-kanban').length));
+  step('7c2 B 新建卡片同步到 A', nAfterA === nBefore + 1, `${nBefore} → ${nAfterA}`);
   await B.screenshot({ path: ART + '/e2e-kanban-b.png' });
 
   // 7d 拖拽换列（抓握把）→ A/B 列分布实时一致
@@ -140,8 +147,19 @@ async function newUser(page, uname) {
   await A.waitForTimeout(700);
   const distA = await A.evaluate(() => [...document.querySelectorAll('.col')].map(c => c.querySelectorAll('.card-kanban').length));
   const distB = await B.evaluate(() => [...document.querySelectorAll('.col')].map(c => c.querySelectorAll('.card-kanban').length));
-  step('7d A 拖拽卡片换列，B 实时同步列分布', JSON.stringify(distA) === JSON.stringify(distB) && distA[0] === 0 && distA[1] >= 1, JSON.stringify(distA));
+  step('7d A 拖拽卡片换列，B 实时同步列分布', JSON.stringify(distA) === JSON.stringify(distB) && distA[0] + distA[1] === 2, JSON.stringify(distA));
   await A.screenshot({ path: ART + '/e2e-kanban-drag.png' });
+
+  // 7e 删除一卡 → 在线消失 → 刷新后（welcome 快照）不复活
+  await A.locator('.card-kanban .del').first().click();
+  await A.waitForTimeout(500);
+  const aliveBefore = await B.evaluate(() => document.querySelectorAll('.card-kanban').length);
+  await A.reload();
+  await A.waitForFunction(() => document.querySelectorAll('#docSel option').length > 0, null, { timeout: 8000 });
+  await A.selectOption('#docSel', kKey); // 刷新后重新打开同一看板
+  await A.waitForTimeout(1500);
+  const aliveAfter = await A.evaluate(() => document.querySelectorAll('.card-kanban').length);
+  step('7e 删除的卡片 B 端消失且 A 刷新后不复活', aliveBefore === aliveAfter && aliveAfter < 2, `${aliveBefore} → ${aliveAfter}`);
 
   // ── 8. 白板：A 建板建卡写文字，B 同步看到；B 拖动卡片，A 实时看到 ──
   await A.goto(BASE + '/board.html');
@@ -192,6 +210,21 @@ async function newUser(page, uname) {
   await A.waitForSelector('#statsLine:not(:has-text("—"))', { timeout: 8000 });
   const stats = (await A.locator('#statsLine').innerText()).replace(/\s+/g, ' ');
   step('8 门户统计实时可读', /用户/.test(stats), stats);
+
+  // ── 10. 个人中心：资料 + 昵称编辑 ─────────────────────────────
+  await A.click('#meBtn');
+  await A.waitForFunction(u => document.body.textContent.includes('我的资料') && document.body.textContent.includes('@' + u), ua, { timeout: 8000 });
+  const pfText = await A.evaluate(() => {
+    const mask = [...document.querySelectorAll('div')].find(d => d.style.zIndex === '999');
+    return mask ? mask.innerText : '';
+  });
+  const pfOk = /我的空间\s*\d+\s*我的文档/.test(pfText.replace(/\n+/g, ' ')) && pfText.includes('注册于');
+  await A.fill('#pfNick', '改名' + ua.slice(0, 4));
+  await A.click('#pfSave');
+  await A.waitForFunction(() => document.querySelector('#pfMsg').textContent === '已保存', null, { timeout: 6000 });
+  const barNick = await A.locator('#userbar b').innerText();
+  step('10 个人中心展示资料且改名生效', pfOk && barNick.startsWith('改名'), pfText.replace(/\n+/g, ' ') + ' → ' + barNick);
+  await A.screenshot({ path: ART + '/e2e-profile.png' });
 
   // ── 汇总 ─────────────────────────────────────────────────────
   const ok = results.filter(r => r.ok).length, total = results.length;

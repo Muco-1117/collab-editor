@@ -24,10 +24,9 @@
   .card.drag { cursor:grabbing; box-shadow:0 10px 24px rgba(20,30,60,.22); z-index:10; }
   .card .body { outline:none; white-space:pre-wrap; word-break:break-all; min-height:1em; font-size:14px; }
   .card .body:empty::before { content:'（双击输入文字）'; color:#c3c8d1; }
-  .card .del { position:absolute; top:5px; right:7px; border:0; background:none; color:#c3c8d1;
-               font-size:14px; cursor:pointer; padding:0 3px; line-height:1; display:none; }
-  .card:hover .del { display:block; }
-  .card .del:hover { color:#e5484d; }
+  .card .del { position:absolute; top:5px; right:7px; border:0; background:none; color:#b9c0cd;
+               font-size:14px; cursor:pointer; padding:0 3px; line-height:1; }
+  .card:hover .del, .card .del:hover { color:#e5484d; }
   .card .resize { position:absolute; right:2px; bottom:2px; width:14px; height:14px; cursor:nwse-resize;
                   background:linear-gradient(135deg, transparent 45%, #b7bfcb 45%, #b7bfcb 60%, transparent 60%); }
   .card .owner { position:absolute; left:7px; top:4px; font-size:10px; color:#b7bfcb; }
@@ -98,7 +97,8 @@ function onMsg(m) {
     case 'incremental': (m.ops||[]).forEach(o => applyRemote(o)); rev = m.rev; stat('增量补发'); break;
     case 'applied':
       rev = m.rev;
-      if (m.clientId !== me) applyRemote(m.op);
+      // 自己的 op 也做本地镜像（DELETE 本地移除；PUT/ADD 幂等）
+      applyRemote(m.op);
       break;
     case 'presence': stat('rev=' + rev + ' · 在线 ' + (m.members||[]).length + ' 人'); break;
   }

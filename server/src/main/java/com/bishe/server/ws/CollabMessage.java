@@ -68,7 +68,10 @@ public final class CollabMessage {
         n.put("docId", room.docId());
         n.put("rev", room.currentRev());
         ArrayNode els = n.putArray("snapshot");
-        room.state().elements().values().forEach(el -> els.add(elementToJson(el)));
+        // 过滤墓碑元素：已删除的卡片/段落不随快照复活（视图层收敛语义）
+        room.state().elements().values().stream()
+                .filter(el -> !el.isTombstone())
+                .forEach(el -> els.add(elementToJson(el)));
         return n.toString();
     }
 

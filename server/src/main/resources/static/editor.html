@@ -126,7 +126,8 @@ function onMsg(m) {
       break;
     case 'applied':
       rev = m.rev;
-      if (m.clientId !== me) applyRemote(m.op);
+      // 自己的 op 也做本地镜像（DELETE 本地移除；PUT/ADD 幂等）
+      applyRemote(m.op);
       break;
     case 'presence':
       stat('rev=' + rev + ' · 在线 ' + (m.members || []).length + ' 人');

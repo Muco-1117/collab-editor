@@ -83,7 +83,54 @@
 </div>
 <script>
   const spHeaders = token => ({ 'Content-Type': 'application/json', Authorization: 'Bearer ' + token });
-  async function loadSpaces() {
+  async function openProfile() {
+    const mask = document.createElement('div');
+    mask.style.cssText = 'position:fixed; inset:0; background:rgba(15,20,35,.55); z-index:999; display:flex; align-items:center; justify-content:center;';
+    mask.onclick = ev => { if (ev.target === mask) mask.remove(); };
+    const box = document.createElement('div');
+    box.style.cssText = 'width:420px; max-width:92vw; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:22px 26px; color:var(--ink); box-shadow:0 18px 50px rgba(0,0,0,.35);';
+    box.innerHTML = '<div style="font-size:16px; font-weight:700; margin-bottom:16px">我的资料</div><div id="pfBody" style="font-size:13px; color:var(--mut)">加载中…</div>';
+    mask.appendChild(box); document.body.appendChild(mask);
+    const body = box.querySelector('#pfBody');
+    const r = await fetch('/api/auth/profile', { headers: spHeaders(window.auth.token()) });
+    if (!r.ok) { body.textContent = '加载失败（' + r.status + '）'; return; }
+    const p = (await r.json()).profile;
+    const init = (p.nickname || p.username || '?').slice(0, 1).toUpperCase();
+    const esc = s => String(s == null ? '' : s).replace(/</g, '&lt;');
+    const created = p.created_at ? String(p.created_at).slice(0, 10) : '—';
+    const stat = (label, v) => '<div style="background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px;text-align:center">'
+      + '<div style="font-size:18px;font-weight:700;color:var(--ink)">' + v + '</div>'
+      + '<div style="font-size:11px;color:var(--mut);margin-top:2px">' + label + '</div></div>';
+    body.innerHTML = ''
+      + '<div style="display:flex;gap:14px;align-items:center;margin-bottom:18px">'
+      + '<div style="width:52px;height:52px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700">' + esc(init) + '</div>'
+      + '<div><div style="font-size:15px;font-weight:600;color:var(--ink)">' + esc(p.nickname || p.username)
+      + ' <span style="color:var(--mut);font-weight:400;font-size:12px">@' + esc(p.username) + '</span></div>'
+      + '<div style="font-size:12px;color:var(--mut);margin-top:3px">角色：' + esc(p.role || '—') + ' · 注册于 ' + esc(created) + '</div></div></div>'
+      + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">'
+      + stat('我的空间', p.spaces) + stat('我的文档', p.docs) + stat('累计操作', p.ops) + '</div>'
+      + '<div style="font-size:12px;color:var(--mut);margin-bottom:6px">昵称（其他人看到的名字）</div>'
+      + '<div style="display:flex;gap:8px"><input id="pfNick" maxlength="16" '
+      + 'style="flex:1;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)" '
+      + 'value="' + esc(p.nickname || p.username) + '">'
+      + '<button class="button" id="pfSave">保存</button></div>'
+      + '<div id="pfMsg" style="font-size:12px;margin-top:6px;min-height:16px"></div>';
+    document.getElementById('pfSave').onclick = async () => {
+      const nick = document.getElementById('pfNick').value.trim();
+      const rr = await fetch('/api/auth/profile', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json', ...spHeaders(window.auth.token()) },
+        body: JSON.stringify({ nickname: nick })
+      });
+      const jj = await rr.json();
+      const msg = document.getElementById('pfMsg');
+      if (!rr.ok) { msg.style.color = '#e05b4f'; msg.textContent = jj.msg || '保存失败'; return; }
+      msg.style.color = '#2e9e5b'; msg.textContent = '已保存';
+      const barB = document.querySelector('#userbar b');
+      if (barB) barB.textContent = nick || jj.profile.username;
+    };
+  }
+
+async function loadSpaces() {
     const token = window.auth.token();
     if (!token) return;
     const box = document.getElementById('spList');
@@ -138,8 +185,10 @@
     const bar = document.getElementById('userbar');
     if (u) {
       bar.innerHTML = '👤 <b>' + (u.nickname || u.username) + '</b> · ' + (u.role || 'editor')
-        + ' <a class="button" id="logout" href="javascript:void(0)" style="margin-left:8px">退出登录</a>';
+        + ' <a class="button" id="meBtn" href="javascript:void(0)" style="margin-left:8px">我的资料</a>'
+        + ' <a class="button" id="logout" href="javascript:void(0)" style="margin-left:4px">退出登录</a>';
       document.getElementById('logout').onclick = () => { auth.clear(); location.reload(); };
+      document.getElementById('meBtn').onclick = openProfile;
       loadSpaces();
       loadStats();
       bindSearch();

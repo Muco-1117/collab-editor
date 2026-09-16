@@ -33,10 +33,9 @@
   .card-kanban .grip:hover { background:#eef2f7; color:#5b6472; }
   .card-kanban .body { outline:none; white-space:pre-wrap; word-break:break-all; font-size:13.5px; min-height:1.2em; }
   .card-kanban .body:empty::before { content:'空白卡片'; color:#c3c8d1; }
-  .card-kanban .del { float:right; border:0; background:none; color:#c3c8d1; cursor:pointer; font-size:12px;
-                      padding:0 2px; margin-left:4px; display:none; }
-  .card-kanban:hover .del { display:inline; }
-  .card-kanban .del:hover { color:#e5484d; }
+  .card-kanban .del { float:right; border:0; background:none; color:#b9c0cd; cursor:pointer; font-size:13px;
+                    padding:0 3px; margin-left:4px; }
+  .card-kanban:hover .del, .card-kanban .del:hover { color:#e5484d; }
   .card-kanban.dragging { opacity:.35; }
   .card-placeholder { border:1.5px dashed #b7c3d8; border-radius:10px; min-height:34px; }
   .col .add-card { border:0; background:none; color:var(--mut); cursor:pointer; font-size:13px;
@@ -111,7 +110,8 @@ function onMsg(m) {
     case 'incremental': (m.ops||[]).forEach(o => applyRemote(o)); rev = m.rev; break;
     case 'applied':
       rev = m.rev;
-      if (m.clientId !== me) applyRemote(m.op);
+      // 自己的 op 也走本地镜像（DELETE 必须本地移除；PUT/ADD 幂等）
+      applyRemote(m.op);
       break;
     case 'presence': stat('rev=' + rev + ' · 在线 ' + (m.members||[]).length + ' 人'); break;
   }
@@ -119,11 +119,10 @@ function onMsg(m) {
 
 /* ============ 渲染 ============ */
 function render(snap) {
-  (snap||[]).forEach(el => {
-    const f = unpack(el.fields || {});
-    if (el.type === 'COLUMN') ensureCol(el.id, f);
-    else if (el.type === 'CARD') ensureCard(el.id, f);
-  });
+  const list = snap || [];
+  // 列先渲染、卡后渲染：快照顺序不可靠（HashMap），卡先于列出现会变孤儿节点
+  list.filter(el => el.type === 'COLUMN').forEach(el => ensureCol(el.id, unpack(el.fields || {})));
+  list.filter(el => el.type === 'CARD').forEach(el => ensureCard(el.id, unpack(el.fields || {})));
   reorderAll();
   $('hint').style.display = cols.size ? 'none' : 'block';
   $('addColBtn').style.display = '';
@@ -190,6 +189,7 @@ function updateCardCol(eid, colId) {
   const target = colId && cols.get(colId) ? cols.get(colId).el.querySelector('.cards') : null;
   if (target) target.appendChild(rec.el);
   reorderIn(target || null);
+  setTimeout(settleOverlaps, 10); // 并发乱序/同 order 时几何自愈
 }
 function reorderAll() {
   const sortedCols = [...cols.entries()].sort((a,b) => a[1].order - b[1].order || (a[0]<b[0]?-1:1));
@@ -207,6 +207,21 @@ function reorderIn(cardsEl) {
     - ((cards.get(b.dataset.eid) || {}).order || 0);
   [...cardsEl.children].filter(x => x.classList.contains('card-kanban'))
     .sort(byCardOrder).forEach(cl => { cl.remove(); cardsEl.appendChild(cl); });
+}
+
+/** 几何自愈：同级相邻卡片发生重叠（并发乱序/同 order）时按 order 强制重排。 */
+function settleOverlaps() {
+  document.querySelectorAll('.col').forEach(col => {
+    const wrap = col.querySelector('.cards');
+    const els = [...wrap.querySelectorAll('.card-kanban')];
+    for (let i = 0; i < els.length - 1; i++) {
+      const a = els[i].getBoundingClientRect(), b = els[i + 1].getBoundingClientRect();
+      if (b.top < a.bottom - 2) {
+        reorderIn(wrap);
+        return;
+      }
+    }
+  });
 }
 
 /* ============ 交互 ============ */
@@ -262,7 +277,7 @@ function bindCard(el, body, del) {
   });
   /* 拖拽把手：卡片空白区（非文字区） */
   el.addEventListener('mousedown', ev => {
-    if (ev.target === body) return;
+    if (ev.target === body || ev.target.closest('button')) return; // 按钮（✕ 删卡）上按下不触发拖拽
     ev.preventDefault();
     const rec = cards.get(el.dataset.eid);
     if (!rec || dragRec) return;
