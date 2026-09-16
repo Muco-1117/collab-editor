@@ -57,6 +57,37 @@ public class DocRepo {
         return r.isEmpty() ? -1L : r.get(0);
     }
 
+    /** 标题命中（我的空间内）。 */
+    public List<Map<String, Object>> searchTitle(long uid, String like) {
+        return jdbc.queryForList("""
+                SELECT d.doc_key, d.title, s.name AS space_name, 'title' AS hit
+                FROM document d
+                JOIN space s ON s.id = d.space_id
+                JOIN space_member sm ON sm.space_id = d.space_id AND sm.user_id = ?
+                WHERE d.title LIKE ? ORDER BY d.updated_at DESC LIMIT 20""", uid, like);
+    }
+
+    /** 正文命中（op 存储值命中，我的空间内，去重）。 */
+    public List<Map<String, Object>> searchBody(long uid, String like) {
+        return jdbc.queryForList("""
+                SELECT DISTINCT d.doc_key, d.title, s.name AS space_name, 'body' AS hit, d.updated_at
+                FROM operation_log o
+                JOIN document d ON d.doc_key = o.doc_id
+                JOIN space s ON s.id = d.space_id
+                JOIN space_member sm ON sm.space_id = d.space_id AND sm.user_id = ?
+                WHERE o.value_json LIKE ? ORDER BY d.updated_at DESC LIMIT 20""", uid, like);
+    }
+
+    /** 平台级统计（总用户/空间/文档/操作数）。 */
+    public Map<String, Long> platformCounts() {
+        Map<String, Long> out = new java.util.LinkedHashMap<>();
+        out.put("users", jdbc.queryForObject("SELECT COUNT(*) FROM `user`", Long.class));
+        out.put("spaces", jdbc.queryForObject("SELECT COUNT(*) FROM space", Long.class));
+        out.put("docs", jdbc.queryForObject("SELECT COUNT(*) FROM document", Long.class));
+        out.put("ops", jdbc.queryForObject("SELECT COUNT(*) FROM operation_log", Long.class));
+        return out;
+    }
+
     /** 物理删除文档及其协同数据（op 日志 + 快照）。 */
     public boolean delete(String docKey) {
         jdbc.update("DELETE FROM operation_log WHERE doc_id=?", docKey);

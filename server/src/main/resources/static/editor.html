@@ -52,6 +52,8 @@
   <h1>协同文档<span class="tag">T0+5 · 段落级实时编辑</span></h1>
   <button class="btn primary" onclick="newDoc()">＋ 新建文档</button>
   <button class="btn" onclick="openDemo()">演示剧本</button>
+  <button class="btn" onclick="showHistory()" title="版本历史：时间线回放与恢复">📜 历史</button>
+  <button class="btn" onclick="exportMd()" title="导出为 Markdown">⬇ 导出</button>
   <span class="tag" id="meTag"></span>
 </header>
 <div id="wrap">
@@ -368,9 +370,60 @@ function showEmpty() {
 }
 
 /* ================= boot ================= */
+const bootQ = new URLSearchParams(location.search).get('doc');
 $('meTag').textContent = '本端 ' + me.slice(0, 6);
 refreshDocs();
 log('编辑器就绪（T0+5）');
+if (bootQ) connect(bootQ);
+
+/* ================= 历史/导出（T0+10） ================= */
+function showHistory() {
+  if (!curDoc) { log('请先打开一个文档'); return; }
+  api('/api/docs/' + curDoc + '/history').then(r => r.json()).then(h => {
+    const box = document.createElement('div');
+    box.id = 'histBox';
+    box.style.cssText = 'position:fixed; inset:0; background:rgba(20,25,35,.55); display:flex; align-items:center; justify-content:center; z-index:99;';
+    box.innerHTML = '<div style="background:#fff; border-radius:12px; padding:18px 22px; width:600px; max-height:72vh; overflow:auto; font-size:13px;">'
+      + '<div style="display:flex; justify-content:space-between; margin-bottom:10px;">'
+      + '<b>📜 版本历史 · 当前 rev=' + h.rev + '</b>'
+      + '<button class="btn" onclick="document.getElementById(\'histBox\').remove()">✕ 关闭</button></div>'
+      + (h.ops && h.ops.length
+          ? h.ops.map(o => histItem(o)).join('')
+          : '<div class="so">暂无操作记录</div>')
+      + '</div>';
+    document.body.appendChild(box);
+  }).catch(e => log('历史加载失败: ' + e));
+}
+function histItem(o) {
+  const t = String((o.value_json || '').replace(/^"|"$/g, ''));
+  return '<div style="padding:7px 8px; border-bottom:1px solid #f0f3f4;">'
+    + '<b>#' + o.seq + '</b> <span class="so">' + String(o.created_at || '').replace('T', ' ').slice(0, 16)
+    + '</span> · <span class="so">' + String(o.element_id || '').slice(0, 12) + '.' + (o.field || '∅')
+    + '</span> = ' + (t.slice(0, 42) || '∅')
+    + ' <button class="btn" style="padding:1px 9px;" onclick="restoreRev(' + o.seq + ')">恢复到此</button>'
+    + '</div>';
+}
+async function restoreRev(rev) {
+  if (!confirm('恢复到 rev ' + rev + '？当前内容将被覆盖（在线成员实时看到变化）。')) return;
+  try {
+    const r = await api('/api/docs/' + curDoc + '/restore', { method: 'POST', body: JSON.stringify({ rev }) });
+    const j = await r.json();
+    const bx = document.getElementById('histBox'); if (bx) bx.remove();
+    alert(j.msg || '恢复完成 (diff ' + (j.ops || 0) + ' ops)');
+  } catch (e) { log('恢复失败: ' + e); }
+}
+function exportMd() {
+  if (!curDoc) { alert('请先打开一个文档'); return; }
+  api('/api/docs/' + curDoc + '/export').then(async r => {
+    if (!r.ok) { log('导出失败 HTTP ' + r.status); return; }
+    const blob = await r.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'doc-' + curDoc.slice(0, 8) + '.md';
+    a.click();
+    log('✅ 已导出 Markdown');
+  });
+}
 </script>
 </body>
 </html>

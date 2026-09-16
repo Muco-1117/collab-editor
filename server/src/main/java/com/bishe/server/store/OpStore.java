@@ -15,6 +15,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 持久化仓储：operation_log（append-only 日志） + element_snapshot（快照）。
@@ -71,12 +72,27 @@ public class OpStore {
 
     /** 读取 (afterSeq, ...] 区间的日志。 */
     public List<Op> loadOpsAfter(String docId, long afterSeq) {
+        return loadOpsAfterWithSeq(docId, afterSeq).stream().map(r -> r.op()).toList();
+    }
+
+    /** (afterSeq, ...] 区间 op + 服务端 seq（回放按 seq 过滤用）。 */
+    public record LoadOp(long seq, Op op) {}
+
+    public List<LoadOp> loadOpsAfterWithSeq(String docId, long afterSeq) {
         return jdbc.query(
-                "SELECT element_id, field, value_json, clock FROM operation_log"
+                "SELECT seq, element_id, field, value_json, clock FROM operation_log"
                         + " WHERE doc_id=? AND seq>? ORDER BY seq",
-                (rs, i) -> decodeOp(rs.getString(1), rs.getString(2),
-                        rs.getString(3), rs.getString(4)),
+                (rs, i) -> new LoadOp(rs.getLong(1),
+                        decodeOp(rs.getString(2), rs.getString(3), rs.getString(4), rs.getString(5))),
                 docId, afterSeq);
+    }
+
+    /** 最近 N 条 op 摘要（历史时间线）。 */
+    public List<Map<String, Object>> opSummaries(String docId, int limit) {
+        return jdbc.queryForList(
+                "SELECT seq, element_id, field, value_json, clock, created_at"
+                        + " FROM operation_log WHERE doc_id=? ORDER BY seq DESC LIMIT ?",
+                docId, limit);
     }
 
     /** 写入快照（UPSERT：同 doc 同 rev 幂等覆盖）。 */
@@ -172,6 +188,11 @@ public class OpStore {
             });
         }
         return arr.toString();
+    }
+
+    /** JsonNode → 引擎语义（整数还原、null 保持）便捷方法。 */
+    public static Object toPlainValue(JsonNode v) {
+        return toPlain(v);
     }
 
     private static Object toPlain(JsonNode v) {

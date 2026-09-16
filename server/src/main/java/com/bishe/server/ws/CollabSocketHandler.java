@@ -31,12 +31,13 @@ public class CollabSocketHandler extends TextWebSocketHandler {
     private final OpStore store;
     private final DocRepo docs;
     private final SpaceRepo spaces;
-    private final ConcurrentHashMap<String, CollabRoom> rooms = new ConcurrentHashMap<>();
+    private final RoomRegistry registry;
 
-    public CollabSocketHandler(OpStore store, DocRepo docs, SpaceRepo spaces) {
+    public CollabSocketHandler(OpStore store, DocRepo docs, SpaceRepo spaces, RoomRegistry registry) {
         this.store = store;
         this.docs = docs;
         this.spaces = spaces;
+        this.registry = registry;
     }
 
     /** 任意连接：按 room 挂载。doc 未开房则自动创建。 */
@@ -62,7 +63,7 @@ public class CollabSocketHandler extends TextWebSocketHandler {
                     ws.close(CloseStatus.NOT_ACCEPTABLE);
                     return;
                 }
-                room = rooms.computeIfAbsent(req.docId(), id -> new CollabRoom(id, store));
+                room = registry.roomFor(req.docId(), store);
                 ws.getAttributes().put("room", room);
 
                 CollabSession ses = new CollabSession(clientId, req.hostname(), ws);
@@ -113,9 +114,5 @@ public class CollabSocketHandler extends TextWebSocketHandler {
             room.leave(ses.clientId());
             log.info("leave client={} doc={}", ses.clientId(), room.docId());
         }
-    }
-
-    public int occupantCount00() {
-        return rooms.values().stream().mapToInt(CollabRoom::occupantCount).sum();
     }
 }

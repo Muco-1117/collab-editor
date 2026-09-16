@@ -110,6 +110,11 @@ public final class CollabRoom {
         }
     }
 
+    /** 外部注入的批量 op（历史恢复等 REST 场景）：与 WS op 同路径落库 + 广播。 */
+    public void applyExternal(java.util.List<Op> ops) {
+        for (Op op : ops) applyOp(op);
+    }
+
     /** (lastRev, rev] 区间增量 op；lastRev 超窗口（被快照吞没）时返回 null 由调用方回退全量。 */
     public List<Op> opsAfter(long lastRev) {
         synchronized (opsLock) {
