@@ -59,6 +59,11 @@
 <script>
 'use strict';
 window.auth.guard();
+/* REST 统一带 token */
+const api = (url, opt = {}) => fetch(url, {
+  ...opt,
+  headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + window.auth.token(), ...(opt.headers || {}) },
+});
 const me = 'b' + Math.random().toString(36).slice(2, 9);
 let ws = null, rev = 0, curDoc = null, lamport = 0;
 const cards = new Map();                        // eid -> {el, dragging, resizing}
@@ -251,7 +256,8 @@ function applyRemote(op) {
 /* ============ 白板列表 ============ */
 async function refreshList() {
   try {
-    const list = await (await fetch('/api/docs')).json();
+    const sp = sessionStorage.getItem('collab_space');
+    const list = await (await api(sp ? '/api/docs?spaceId=' + sp : '/api/docs')).json();
     const sel = $('boardSel');
     sel.innerHTML = '';
     list.forEach(d => {
@@ -266,8 +272,7 @@ async function refreshList() {
 async function newBoard() {
   const t = prompt('新白板名称', '白板 ' + new Date().toLocaleTimeString().slice(0,5));
   if (t === null) return;
-  const r = await fetch('/api/docs', { method:'POST', headers:{'Content-Type':'application/json'},
-                                       body: JSON.stringify({ title: t }) });
+  const r = await api('/api/docs', { method:'POST', body: JSON.stringify({ title: t }) });
   const d = await r.json();
   await refreshList();
   connect(d.docKey);

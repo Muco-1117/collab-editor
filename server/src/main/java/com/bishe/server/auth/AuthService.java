@@ -75,4 +75,16 @@ public class AuthService {
                 (rs, n) -> new UserPub(rs.getLong("id"), rs.getString("username"),
                         rs.getString("nickname"), rs.getString("role")), uid);
     }
+
+    /** 按用户名查用户；不存在返回 null。 */
+    public UserPub byUsername(String username) {
+        try {
+            return jdbc.queryForObject(
+                    "SELECT id, username, nickname, role FROM `user` WHERE username = ?",
+                    (rs, n) -> new UserPub(rs.getLong("id"), rs.getString("username"),
+                            rs.getString("nickname"), rs.getString("role")), username);
+        } catch (org.springframework.dao.EmptyResultDataAccessException e) {
+            return null;
+        }
+    }
 }

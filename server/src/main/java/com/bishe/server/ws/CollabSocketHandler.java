@@ -1,6 +1,9 @@
 package com.bishe.server.ws;
 
+import com.bishe.server.store.DocRepo;
 import com.bishe.server.store.OpStore;
+import com.bishe.server.store.SpaceRepo;
+import com.bishe.server.auth.AuthService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
@@ -26,10 +29,14 @@ public class CollabSocketHandler extends TextWebSocketHandler {
     private static final Logger log = LoggerFactory.getLogger(CollabSocketHandler.class);
     private final ObjectMapper mapper = new ObjectMapper();
     private final OpStore store;
+    private final DocRepo docs;
+    private final SpaceRepo spaces;
     private final ConcurrentHashMap<String, CollabRoom> rooms = new ConcurrentHashMap<>();
 
-    public CollabSocketHandler(OpStore store) {
+    public CollabSocketHandler(OpStore store, DocRepo docs, SpaceRepo spaces) {
         this.store = store;
+        this.docs = docs;
+        this.spaces = spaces;
     }
 
     /** 任意连接：按 room 挂载。doc 未开房则自动创建。 */
@@ -50,6 +57,11 @@ public class CollabSocketHandler extends TextWebSocketHandler {
                     ws.getAttributes().put("joined", Boolean.TRUE);
                 }
                 String clientId = req.clientId().isBlank() ? ws.getId() : req.clientId();
+                if (!canJoin(ws, req.docId())) {
+                    ws.sendMessage(new TextMessage(CollabMessage.error("无权访问该文档空间")));
+                    ws.close(CloseStatus.NOT_ACCEPTABLE);
+                    return;
+                }
                 room = rooms.computeIfAbsent(req.docId(), id -> new CollabRoom(id, store));
                 ws.getAttributes().put("room", room);
 
@@ -82,6 +94,15 @@ public class CollabSocketHandler extends TextWebSocketHandler {
             }
             default -> ws.sendMessage(new TextMessage(CollabMessage.error("未知帧类型: " + type)));
         }
+    }
+
+    /** T0+9 空间守卫：库内文档须为空间成员；库外的裸 docId 作为公共房间放行。 */
+    private boolean canJoin(WebSocketSession ws, String docId) {
+        long spaceId = docs.spaceIdOf(docId);
+        if (spaceId < 0) return true;
+        AuthService.UserPub u = (AuthService.UserPub) ws.getAttributes().get(TokenHandshakeInterceptor.ATTR_USER);
+        if (u == null) return false;
+        return spaces.roleOf(spaceId, u.id()) != null;
     }
 
     @Override

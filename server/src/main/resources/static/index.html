@@ -39,7 +39,18 @@
 <div class="wrap">
   <div class="userbar" id="userbar">…</div>
   <h1>协同工作台 <span class="stage done">运行中</span></h1>
-  <p class="sub">基于自研协同引擎（Lamport 时钟 + LWW 合并）的多人实时协作应用 · M2 前段</p>
+  <p class="sub">基于自研协同引擎（Lamport 时钟 + LWW 合并）的多人实时协作应用</p>
+
+  <div style="background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px 20px; margin-bottom:20px;">
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+      <b style="font-size:15px">🗂 我的空间</b>
+      <input id="spName" placeholder="空间名称" style="flex:1; max-width:220px; padding:6px 10px; border:1px solid var(--line); border-radius:8px; font-size:13px;">
+      <button class="button" id="spCreate">＋ 创建空间</button>
+      <span class="so" style="margin:0">空间互不可见；创建空间后即可在此邀请成员</span>
+    </div>
+    <div id="spList" style="display:flex; flex-wrap:wrap; gap:10px;"></div>
+  </div>
+
   <div class="grid">
     <a class="app" href="/editor.html">
       <div class="em">📝</div>
@@ -73,6 +84,41 @@
   </div>
 </div>
 <script>
+  const spHeaders = token => ({ 'Content-Type': 'application/json', Authorization: 'Bearer ' + token });
+  async function loadSpaces() {
+    const token = window.auth.token();
+    if (!token) return;
+    const box = document.getElementById('spList');
+    try {
+      const r = await fetch('/api/spaces', { headers: spHeaders(token) });
+      const spaces = await r.json();
+      box.innerHTML = '';
+      if (!spaces.length) { box.innerHTML = '<span class="so">还没有空间——创建第一个吧</span>'; return; }
+      spaces.forEach(s => {
+        const card = document.createElement('div');
+        card.style.cssText = 'border:1px solid var(--line); border-radius:10px; padding:10px 14px; min-width:190px;';
+        card.innerHTML = '<div><b>' + s.name + '</b> <span class="so">' + (s.my_role || '') + '</span></div>'
+          + '<div class="so" style="margin:4px 0 8px">' + s.doc_count + ' 文档 · ' + s.member_count + ' 成员</div>'
+          + '<a class="button" href="/editor.html" style="margin-right:6px">文档</a>'
+          + '<a class="button" href="/board.html" style="margin-right:6px">白板</a>'
+          + '<a class="button" href="/kanban.html">看板</a>';
+        card.querySelectorAll('a').forEach(a => a.addEventListener('click', e => {
+          e.preventDefault();
+          sessionStorage.setItem('collab_space', String(s.id));
+          location.href = a.getAttribute('href');
+        }));
+        box.appendChild(card);
+      });
+    } catch (e) { box.innerHTML = '<span class="so">空间列表加载失败</span>'; }
+  }
+  document.getElementById('spCreate').onclick = async () => {
+    const name = document.getElementById('spName').value.trim();
+    if (!name) return;
+    const r = await fetch('/api/spaces', { method: 'POST', headers: spHeaders(window.auth.token()), body: JSON.stringify({ name }) });
+    const j = await r.json();
+    if (r.ok) { document.getElementById('spName').value = ''; loadSpaces(); }
+    else alert(j.msg || '创建失败');
+  };
   (async () => {
     const u = await window.auth.me();
     const bar = document.getElementById('userbar');
@@ -80,6 +126,7 @@
       bar.innerHTML = '👤 <b>' + (u.nickname || u.username) + '</b> · ' + (u.role || 'editor')
         + ' <a class="button" id="logout" href="javascript:void(0)" style="margin-left:8px">退出登录</a>';
       document.getElementById('logout').onclick = () => { auth.clear(); location.reload(); };
+      loadSpaces();
     } else {
       bar.innerHTML = '<a class="button" href="/login.html">登录 / 注册</a>';
     }

@@ -47,11 +47,18 @@ class DocRestAndParagraphTest {
     @Test
     void docCrud() throws Exception {
         String url = "http://localhost:" + port + "/api/docs";
+        // 先建空间（T0+9 文档归属空间）
+        String spUrl = "http://localhost:" + port + "/api/spaces";
+        org.springframework.http.HttpHeaders jh = new org.springframework.http.HttpHeaders();
+        jh.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+        ResponseEntity<String> sp = rest.postForEntity(spUrl,
+                new org.springframework.http.HttpEntity<>("{\"name\":\"T0+5 测试空间\"}", jh), String.class);
+        assertEquals(200, sp.getStatusCode().value());
+        long spaceId = mapper.readTree(sp.getBody()).path("spaceId").asLong();
         // 创建
-        org.springframework.http.HttpHeaders hd = new org.springframework.http.HttpHeaders();
-        hd.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
         ResponseEntity<String> created = rest.postForEntity(url,
-                new org.springframework.http.HttpEntity<>("{\"title\":\"T0+5 验收文档\"}", hd), String.class);
+                new org.springframework.http.HttpEntity<>(
+                        "{\"title\":\"T0+5 验收文档\",\"spaceId\":" + spaceId + "}", jh), String.class);
         assertEquals(200, created.getStatusCode().value());
         JsonNode c = mapper.readTree(created.getBody());
         String key = c.path("docKey").asText();

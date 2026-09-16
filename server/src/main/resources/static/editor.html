@@ -75,6 +75,11 @@
 <script>
 'use strict';
 window.auth.guard();
+/* REST 统一带 JWT */
+const api = (url, opt = {}) => fetch(url, {
+  ...opt,
+  headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + window.auth.token(), ...(opt.headers || {}) },
+});
 /* ================= 顶层状态 ================= */
 const me = 'c' + Math.random().toString(36).slice(2, 9);
 let ws = null, rev = 0, curDoc = null;
@@ -314,7 +319,8 @@ $('title').addEventListener('input', () => {
 /* ================= REST：文档 CRUD ================= */
 async function refreshDocs() {
   try {
-    const r = await fetch('/api/docs');
+    const sp = sessionStorage.getItem('collab_space');
+    const r = await api(sp ? '/api/docs?spaceId=' + sp : '/api/docs');
     const list = await r.json();
     $('docList').innerHTML = '';
     list.forEach(doc => {
@@ -331,7 +337,7 @@ async function refreshDocs() {
       del.onclick = async ev => {
         ev.stopPropagation();
         if (!confirm('删除该文档及其全部协同数据？')) return;
-        await fetch('/api/docs/' + doc.doc_key, { method: 'DELETE' });
+        await api('/api/docs/' + doc.doc_key, { method: 'DELETE' });
         if (curDoc === doc.doc_key) showEmpty();
         refreshDocs();
       };
@@ -343,14 +349,12 @@ async function refreshDocs() {
 function newDoc() {
   const t = prompt('新文档标题', '新建文档');
   if (t === null) return;
-  fetch('/api/docs', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                       body: JSON.stringify({ title: t }) })
+  api('/api/docs', { method: 'POST', body: JSON.stringify({ title: t }) })
     .then(r => r.json())
     .then(d => { refreshDocs(); connect(d.docKey); });
 }
 async function openDemo() {
-  const r = await fetch('/api/docs', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                       body: JSON.stringify({ title: '演示文档-协同' }) });
+  const r = await api('/api/docs', { method: 'POST', body: JSON.stringify({ title: '演示文档-协同' }) });
   const d = await r.json();
   refreshDocs();
   connect(d.docKey);

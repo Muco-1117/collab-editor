@@ -7,8 +7,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 文档元数据仓储（document 表）。
- * P0 阶段：单空间、无鉴权，doc_key 即 WS 房间键。
+ * 文档元数据仓储（document 表）。T0+9：文档归属空间，读写按空间校验。
  */
 @Repository
 public class DocRepo {
@@ -20,23 +19,42 @@ public class DocRepo {
     }
 
     /** 创建文档，返回新 doc_key。 */
-    public String create(String title) {
+    public String create(String title, long spaceId) {
         String key = java.util.UUID.randomUUID().toString();
-        jdbc.update("INSERT INTO document(doc_key, title) VALUES(?, ?)", key, title);
+        jdbc.update("INSERT INTO document(doc_key, title, space_id) VALUES(?, ?, ?)", key, title, spaceId);
         return key;
     }
 
-    /** 全部文档（按更新时间倒序）。 */
-    public List<Map<String, Object>> list() {
-        return jdbc.queryForList(
-                "SELECT doc_key, title, created_at, updated_at FROM document ORDER BY updated_at DESC");
+    /** 指定空间内的文档列表（按更新时间倒序）。 */
+    public List<Map<String, Object>> listBySpace(long spaceId) {
+        return jdbc.queryForList("""
+                SELECT d.doc_key, d.title, d.created_at, d.updated_at, d.space_id, s.name AS space_name
+                FROM document d JOIN space s ON s.id = d.space_id
+                WHERE d.space_id = ? ORDER BY d.updated_at DESC""", spaceId);
     }
 
-    /** 查询单个文档元信息。 */
+    /** 我能看到的所有空间的文档。 */
+    public List<Map<String, Object>> listVisible(long uid) {
+        return jdbc.queryForList("""
+                SELECT d.doc_key, d.title, d.created_at, d.updated_at, d.space_id, s.name AS space_name
+                FROM document d
+                JOIN space s ON s.id = d.space_id
+                JOIN space_member sm ON sm.space_id = d.space_id AND sm.user_id = ?
+                ORDER BY d.updated_at DESC""", uid);
+    }
+
+    /** 查询单个文档元信息（含空间归属）；不存在返回 null。 */
     public Map<String, Object> get(String docKey) {
-        List<Map<String, Object>> r = jdbc.queryForList(
-                "SELECT doc_key, title, created_at, updated_at FROM document WHERE doc_key=?", docKey);
+        List<Map<String, Object>> r = jdbc.queryForList("""
+                SELECT d.doc_key, d.title, d.created_at, d.updated_at, d.space_id, s.name AS space_name
+                FROM document d JOIN space s ON s.id = d.space_id WHERE d.doc_key = ?""", docKey);
         return r.isEmpty() ? null : r.get(0);
+    }
+
+    /** 只查归属空间（WS 守卫用）；不存在返回 -1。 */
+    public long spaceIdOf(String docKey) {
+        List<Long> r = jdbc.queryForList("SELECT space_id FROM document WHERE doc_key = ?", Long.class, docKey);
+        return r.isEmpty() ? -1L : r.get(0);
     }
 
     /** 物理删除文档及其协同数据（op 日志 + 快照）。 */
