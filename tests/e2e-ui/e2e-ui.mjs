@@ -133,7 +133,51 @@ async function newUser(page, uname) {
   step('7c B 补卡实时同步回 A', true);
   await B.screenshot({ path: ART + '/e2e-kanban-b.png' });
 
-  // ── 8. 门户统计随操作实时更新 ───────────────────────────────
+  // ── 8. 白板：A 建板建卡写文字，B 同步看到；B 拖动卡片，A 实时看到 ──
+  await A.goto(BASE + '/board.html');
+  await A.waitForSelector('button:has-text("＋ 新建白板")', { timeout: 8000 });
+  await A.click('button:has-text("＋ 新建白板")');
+  await A.waitForSelector('#board .card, #dot.on', { timeout: 8000 });
+  // 双击建卡
+  const box = await A.locator('#board').boundingBox();
+  await A.mouse.dblclick(box.x + 260, box.y + 200);
+  await A.waitForSelector('#board .card', { timeout: 6000 });
+  await A.waitForTimeout(400);
+  // 双击卡文字区输入
+  const cardBody = A.locator('#board .card .body').first();
+  await cardBody.dblclick();
+  await cardBody.pressSequentially('白板卡片A', { delay: 10 });
+  await A.waitForTimeout(500);
+  const bKey = await A.evaluate(() => document.querySelector('#boardSel').value || '');
+  step('8 A 建白板并建首卡', bKey.length > 0, bKey.slice(0, 8));
+
+  await B.goto(BASE + '/board.html');
+  await B.waitForFunction(() => document.querySelectorAll('#boardSel option').length > 0, null, { timeout: 8000 });
+  await B.selectOption('#boardSel', bKey);
+  await B.waitForFunction(() => document.querySelector('#board .card .body')?.textContent.includes('白板卡片A'), null, { timeout: 8000 });
+  step('8b B 看到 A 的白板卡片实时同步', true);
+
+  // B 拖动卡片 → A 实时同步位置
+  const drag = await B.locator('#board .card').boundingBox();
+  await B.mouse.move(drag.x + 40, drag.y + 20);
+  await B.mouse.down();
+  await B.mouse.move(drag.x + 220, drag.y + 140, { steps: 8 });
+  await B.mouse.up();
+  await B.waitForTimeout(400);
+  const posA = await A.evaluate(() => {
+    const c = document.querySelector('#board .card');
+    return c ? c.style.left + ',' + c.style.top : '';
+  });
+  step('8c B 拖动卡片，A 实时同步新位置', /^\d+px,\d+px$/.test(posA) && !posA.startsWith('0px'), posA);
+  await A.screenshot({ path: ART + '/e2e-board-a-after-drag.png' });
+  await B.waitForTimeout(600);
+  const posB = await B.evaluate(() => {
+    const c = document.querySelector('#board .card');
+    return c ? c.style.left + ',' + c.style.top : '';
+  });
+  step('8d 拖动后 A/B 两端卡片坐标一致', posA === posB, posA + ' vs ' + posB);
+
+  // ── 9. 门户统计随操作实时更新 ───────────────────────────────
   await A.goto(BASE + '/');
   await A.waitForSelector('#statsLine:not(:has-text("—"))', { timeout: 8000 });
   const stats = (await A.locator('#statsLine').innerText()).replace(/\s+/g, ' ');
