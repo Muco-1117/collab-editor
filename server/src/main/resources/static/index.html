@@ -46,12 +46,12 @@
   <h1>协同工作台 <span class="stage done">运行中</span></h1>
   <p class="sub">基于自研协同引擎（Lamport 时钟 + LWW 合并）的多人实时协作应用</p>
 
-  <div style="background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px 20px; margin-bottom:20px;">
+  <div id="spPanel" style="background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px 20px; margin-bottom:20px;">
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
       <b style="font-size:15px">🗂 我的空间</b>
       <input id="spName" placeholder="空间名称" style="flex:1; max-width:220px; padding:6px 10px; border:1px solid var(--line); border-radius:8px; font-size:13px;">
       <button class="button" id="spCreate">＋ 创建空间</button>
-      <span class="so" style="margin:0">空间互不可见；创建空间后即可在此邀请成员</span>
+      <span class="so" style="margin:0">空间彼此隔离；创建空间后即可邀请成员</span>
     </div>
     <div id="spList" style="display:flex; flex-wrap:wrap; gap:10px;"></div>
   </div>
@@ -145,6 +145,13 @@
       bindSearch();
     } else {
       bar.innerHTML = '<a class="button" href="/login.html">登录 / 注册</a>';
+      // 未登录：我的空间面板替换为引导登录提示（避免点到 401）
+      document.getElementById('spPanel').innerHTML =
+        '<div style="text-align:center; padding:26px 0;">'
+        + '<div style="font-size:15px; margin-bottom:10px;">登录后可创建 / 加入空间，与成员实时协同</div>'
+        + '<a class="button" href="/login.html" style="display:inline-block; padding:9px 30px;">去登录 / 注册</a></div>';
+      document.getElementById('searchQ').disabled = true;
+      document.getElementById('searchQ').placeholder = '登录后可搜索文档';
     }
   })();
   async function loadStats() {

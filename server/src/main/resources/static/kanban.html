@@ -28,6 +28,9 @@
   .col .cards { display:flex; flex-direction:column; gap:8px; overflow-y:auto; min-height:20px; flex:1; }
   .card-kanban { background:var(--card); border:1px solid var(--line); border-radius:10px;
                  padding:9px 10px; box-shadow:0 1px 3px rgba(20,30,60,.06); }
+  .card-kanban .grip { padding:1px 6px 3px; font-size:11px; color:#aab2bf; cursor:grab;
+    border-bottom:1px dashed #e8ebf0; user-select:none; margin:-3px -4px 6px; border-radius:8px 8px 0 0; }
+  .card-kanban .grip:hover { background:#eef2f7; color:#5b6472; }
   .card-kanban .body { outline:none; white-space:pre-wrap; word-break:break-all; font-size:13.5px; min-height:1.2em; }
   .card-kanban .body:empty::before { content:'空白卡片'; color:#c3c8d1; }
   .card-kanban .del { float:right; border:0; background:none; color:#c3c8d1; cursor:pointer; font-size:12px;
@@ -161,9 +164,12 @@ function ensureCard(eid, f) {
     el.dataset.eid = eid;
     const del = document.createElement('button');
     del.className = 'del'; del.textContent = '✕'; del.title = '删除卡片';
+    const grip = document.createElement('div');
+    grip.className = 'grip'; grip.title = '按住拖动换列 / 排序';
+    grip.textContent = '⠿ 拖动';
     const body = document.createElement('div');
     body.className = 'body'; body.contentEditable = true; body.spellcheck = false;
-    el.append(del, body);
+    el.append(grip, del, body);
     bindCard(el, body, del);
     rec = { el, col: null, order: 0 };
     cards.set(eid, rec);

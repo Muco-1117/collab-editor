@@ -127,6 +127,22 @@ async function newUser(page, uname) {
   step('7c B 补卡实时同步回 A', true);
   await B.screenshot({ path: ART + '/e2e-kanban-b.png' });
 
+  // 7d 拖拽换列（抓握把）→ A/B 列分布实时一致
+  await A.click('#addColBtn');                                   // 第二列
+  await A.waitForFunction(() => document.querySelectorAll('.col').length === 2, null, { timeout: 6000 });
+  const c1 = await A.locator('.col').nth(0).boundingBox();
+  const c2 = await A.locator('.col').nth(1).boundingBox();
+  const grip = await A.locator('.card-kanban .grip').first().boundingBox();
+  await A.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+  await A.mouse.down();
+  await A.mouse.move(c2.x + 80, c2.y + 90, { steps: 12 });
+  await A.mouse.up();
+  await A.waitForTimeout(700);
+  const distA = await A.evaluate(() => [...document.querySelectorAll('.col')].map(c => c.querySelectorAll('.card-kanban').length));
+  const distB = await B.evaluate(() => [...document.querySelectorAll('.col')].map(c => c.querySelectorAll('.card-kanban').length));
+  step('7d A 拖拽卡片换列，B 实时同步列分布', JSON.stringify(distA) === JSON.stringify(distB) && distA[0] === 0 && distA[1] >= 1, JSON.stringify(distA));
+  await A.screenshot({ path: ART + '/e2e-kanban-drag.png' });
+
   // ── 8. 白板：A 建板建卡写文字，B 同步看到；B 拖动卡片，A 实时看到 ──
   await A.goto(BASE + '/board.html');
   await A.waitForSelector('button:has-text("＋ 新建白板")', { timeout: 8000 });
