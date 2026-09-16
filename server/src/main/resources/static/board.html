@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>协同工作台 · 白板</title>
+<style>
+  :root { --bg:#f7f8fa; --card:#fff; --line:#e3e6eb; --ink:#1f2329; --mut:#8a919f; --acc:#3b82f6; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.6 system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+         background:var(--bg); color:var(--ink); overflow:hidden; }
+  header { display:flex; align-items:center; gap:12px; padding:10px 20px; background:var(--card);
+           border-bottom:1px solid var(--line); }
+  header h1 { font-size:16px; margin:0; font-weight:600; }
+  .tag { font-size:12px; color:var(--mut); }
+  .btn { border:1px solid var(--line); background:#fff; border-radius:6px; padding:5px 12px;
+         cursor:pointer; font-size:13px; }
+  .btn.primary { background:var(--acc); border-color:var(--acc); color:#fff; }
+  #board { position:relative; height:calc(100vh - 52px); overflow:hidden;
+           background:radial-gradient(circle, #eceff3 1px, transparent 1px) 0 0/24px 24px; }
+  .card { position:absolute; min-width:90px; min-height:56px; background:var(--card);
+          border:1px solid var(--line); border-radius:10px; box-shadow:0 1px 4px rgba(20,30,60,.08);
+          padding:26px 10px 10px; cursor:grab; user-select:none; }
+  .card.drag { cursor:grabbing; box-shadow:0 10px 24px rgba(20,30,60,.22); z-index:10; }
+  .card .body { outline:none; white-space:pre-wrap; word-break:break-all; min-height:1em; font-size:14px; }
+  .card .body:empty::before { content:'（双击输入文字）'; color:#c3c8d1; }
+  .card .del { position:absolute; top:5px; right:7px; border:0; background:none; color:#c3c8d1;
+               font-size:14px; cursor:pointer; padding:0 3px; line-height:1; display:none; }
+  .card:hover .del { display:block; }
+  .card .del:hover { color:#e5484d; }
+  .card .resize { position:absolute; right:2px; bottom:2px; width:14px; height:14px; cursor:nwse-resize;
+                  background:linear-gradient(135deg, transparent 45%, #b7bfcb 45%, #b7bfcb 60%, transparent 60%); }
+  .card .owner { position:absolute; left:7px; top:4px; font-size:10px; color:#b7bfcb; }
+  #status { position:fixed; right:14px; bottom:12px; font-size:12px; color:var(--mut);
+            background:rgba(255,255,255,.9); border:1px solid var(--line); border-radius:8px; padding:4px 10px; }
+  #log { position:fixed; left:14px; bottom:12px; font-size:11px; color:#9aa3b2; max-width:420px;
+         max-height:64px; overflow:auto; background:rgba(255,255,255,.92); border:1px solid var(--line);
+         border-radius:8px; padding:4px 10px; display:none; }
+  #hint { position:absolute; left:50%; top:46%; transform:translate(-50%,-50%); text-align:center;
+          color:#aab1bd; pointer-events:none; display:none; }
+  #hint b { display:block; font-size:15px; margin-bottom:6px; color:#8a919f; }
+  .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; }
+  .dot.on { background:#23c55e; } .dot.off { background:#e5484d; }
+</style>
+</head>
+<body>
+<header>
+  <h1>协同白板<span class="tag">T0+6 · 卡片拖拽/缩放/文字实时同步</span></h1>
+  <button class="btn primary" onclick="newBoard()">＋ 新建白板</button>
+  <select class="btn" id="boardSel" onchange="connect(this.value)"></select>
+  <span class="tag" id="meTag"></span>
+</header>
+<div id="board">
+  <div id="hint"><b>双击空白处新建卡片</b>拖动卡片 · 右下角缩放 · 右上角 ✕ 删除 · 双击文字区域编辑</div>
+</div>
+<div id="status"><span class="dot off" id="dot"></span><span id="statText">未连接</span></div>
+<div id="log"></div>
+
+<script>
+'use strict';
+const me = 'b' + Math.random().toString(36).slice(2, 9);
+let ws = null, rev = 0, curDoc = null, lamport = 0;
+const cards = new Map();                        // eid -> {el, dragging, resizing}
+const $ = id => document.getElementById(id);
+const clock = () => `${me}:${++lamport}`;
+const log = s => { $('log').style.display='block'; $('log').textContent += '> ' + s + '\n'; $('log').scrollTop=1e9; };
+const stat = t => $('statText').textContent = t;
+const setDot = on => $('dot').className = 'dot ' + (on ? 'on' : 'off');
+
+/* ============ WS ============ */
+function connect(docKey) {
+  if (!docKey) return;
+  if (ws) { ws.onclose = null; ws.close(); }
+  curDoc = docKey;
+  rev = 0;
+  cards.forEach(r => r.el.remove()); cards.clear();
+  $('hint').style.display = 'block';
+  ws = new WebSocket((location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/ws/collab');
+  ws.onopen = () => send({ type:'hello', docId:curDoc, clientId:me, hostname:'board', lastRev:0 });
+  ws.onmessage = ev => { try { onMsg(JSON.parse(ev.data)); } catch(e){ log('坏帧'); } };
+  ws.onclose = () => setDot(false);
+  ws.onerror = () => log('连接错误');
+}
+const send = o => ws && ws.readyState === 1 && ws.send(JSON.stringify(o));
+const sendPut = (eid, field, value) => send({ type:'op', docId:curDoc, clientId:me, baseRev:rev,
+  op:{ type:'PUT', elementId:eid, elementType:'CARD', field, value, clock:clock() } });
+const sendCardOp = op => send({ type:'op', docId:curDoc, clientId:me, baseRev:rev, op });
+
+function onMsg(m) {
+  switch (m.type) {
+    case 'welcome': setDot(true); render(m.snapshot||[]); rev = m.rev; stat('已连接 rev=' + rev); break;
+    case 'incremental': (m.ops||[]).forEach(o => applyRemote(o)); rev = m.rev; stat('增量补发'); break;
+    case 'applied':
+      rev = m.rev;
+      if (m.clientId !== me) applyRemote(m.op);
+      break;
+    case 'presence': stat('rev=' + rev + ' · 在线 ' + (m.members||[]).length + ' 人'); break;
+  }
+}
+
+/* ============ 渲染 ============ */
+function render(snap) {
+  (snap||[]).forEach(el => {
+    if (el.type === 'CARD') ensureCard(el.id, unwrap(el.fields||{}));
+  });
+  $('hint').style.display = cards.size ? 'none' : 'block';
+  refreshList();
+}
+function unwrap(fields) {
+  const out = {};
+  Object.entries(fields).forEach(([k,v]) => { out[k] = v && typeof v === 'object' && 'value' in v ? v.value : v; });
+  return out;
+}
+function ensureCard(eid, f) {
+  let rec = cards.get(eid);
+  if (!rec) {
+    const el = document.createElement('div');
+    el.className = 'card';
+    el.dataset.eid = eid;
+    const c = document.createElement('div');
+    c.className = 'body'; c.contentEditable = true; c.spellcheck = false;
+    const del = document.createElement('button');
+    del.className = 'del'; del.textContent = '✕'; del.title = '删除卡片';
+    const tg = document.createElement('span'); tg.className = 'owner';
+    const rz = document.createElement('div'); rz.className = 'resize';
+    el.append(tg, c, del, rz);
+    bindCard(el, c, del, rz);
+    $('board').appendChild(el);
+    rec = { el, dragging:false, resizing:false };
+    cards.set(eid, rec);
+  }
+  applyFields(eid, f, true);
+  return rec;
+}
+function applyFields(eid, f, init) {
+  const rec = cards.get(eid);
+  if (!rec) return;
+  const el = rec.el;
+  if (f.x != null) el.style.left = f.x + 'px';
+  if (f.y != null) el.style.top = f.y + 'px';
+  if (f.w != null) el.style.width = f.w + 'px';
+  if (f.h != null) el.style.height = f.h + 'px';
+  const c = el.querySelector('.body');
+  if (f.text != null && document.activeElement !== c && c.textContent !== String(f.text)) {
+    c.textContent = String(f.text);
+  }
+  if (f.owner != null) el.querySelector('.owner').textContent = String(f.owner);
+}
+
+/* ============ 卡片交互 ============ */
+function bindCard(el, c, del, rz) {
+  del.onclick = () => sendCardOp({ type:'DELETE', elementId:el.dataset.eid, elementType:'CARD', clock:clock() });
+  c.addEventListener('input', () => {
+    clearTimeout(c._t);
+    c._t = setTimeout(() => sendPut(el.dataset.eid, 'text', c.textContent), 250);
+  });
+  c.addEventListener('mousedown', ev => ev.stopPropagation());
+  del.addEventListener('mousedown', ev => ev.stopPropagation());
+  rz.addEventListener('mousedown', ev => ev.stopPropagation());
+  /* 拖拽（点击卡片本体） */
+  el.addEventListener('mousedown', ev => {
+    if (ev.target !== el) return;
+    ev.preventDefault();
+    const rec = cards.get(el.dataset.eid);
+    if (!rec || rec.dragging || rec.resizing) return;
+    rec.dragging = true;
+    el.classList.add('drag');
+    const sx = ev.clientX, sy = ev.clientY;
+    const ox = parseFloat(el.style.left)||0, oy = parseFloat(el.style.top)||0;
+    let last = 0;
+    const mv = ev2 => {
+      const nx = Math.max(0, ox + ev2.clientX - sx);
+      const ny = Math.max(0, oy + ev2.clientY - sy);
+      el.style.left = nx + 'px'; el.style.top = ny + 'px';
+      const now = Date.now();
+      if (now - last > 90) { last = now; sendPut(el.dataset.eid, 'x', Math.round(nx)); sendPut(el.dataset.eid, 'y', Math.round(ny)); }
+    };
+    const up = () => {
+      rec.dragging = false;
+      el.classList.remove('drag');
+      sendPut(el.dataset.eid, 'x', Math.round(parseFloat(el.style.left)||0));
+      sendPut(el.dataset.eid, 'y', Math.round(parseFloat(el.style.top)||0));
+      window.removeEventListener('mousemove', mv);
+      window.removeEventListener('mouseup', up);
+    };
+    window.addEventListener('mousemove', mv);
+    window.addEventListener('mouseup', up);
+  });
+  /* 缩放（右下角手柄） */
+  rz.addEventListener('mousedown', ev => {
+    ev.stopPropagation();
+    const rec = cards.get(el.dataset.eid);
+    if (!rec || rec.resizing || rec.dragging) return;
+    rec.resizing = true;
+    el.classList.add('drag');
+    const sx = ev.clientX, sy = ev.clientY;
+    const ow = parseFloat(el.style.width)||170, oh = parseFloat(el.style.height)||110;
+    let last = 0;
+    const mv = ev2 => {
+      const nw = Math.max(90, ow + ev2.clientX - sx);
+      const nh = Math.max(56, oh + ev2.clientY - sy);
+      el.style.width = nw + 'px'; el.style.height = nh + 'px';
+      const now = Date.now();
+      if (now - last > 90) { last = now; sendPut(el.dataset.eid, 'w', Math.round(nw)); sendPut(el.dataset.eid, 'h', Math.round(nh)); }
+    };
+    const up = () => {
+      rec.resizing = false;
+      el.classList.remove('drag');
+      sendPut(el.dataset.eid, 'w', Math.round(parseFloat(el.style.width)||170));
+      sendPut(el.dataset.eid, 'h', Math.round(parseFloat(el.style.height)||110));
+      window.removeEventListener('mousemove', mv);
+      window.removeEventListener('mouseup', up);
+    };
+    window.addEventListener('mousemove', mv);
+    window.addEventListener('mouseup', up);
+  });
+}
+
+/* 双击空白新建卡片 */
+$('board').addEventListener('dblclick', ev => {
+  if (ev.target !== $('board')) return;
+  const r = $('board').getBoundingClientRect();
+  const eid = 'card-' + Math.random().toString(36).slice(2, 10);
+  const x = Math.max(0, Math.round(ev.clientX - r.left - 85));
+  const y = Math.max(0, Math.round(ev.clientY - r.top - 30));
+  sendCardOp({ type:'ADD', elementId:eid, elementType:'CARD', clock:clock() });
+  sendPut(eid, 'x', x);
+  sendPut(eid, 'y', y);
+  sendPut(eid, 'w', 170);
+  sendPut(eid, 'h', 110);
+  const rec = ensureCard(eid, { x, y, w:170, h:110, text:'' });
+  $('hint').style.display = 'none';
+  rec.el.querySelector('.body').focus();
+});
+
+/* ============ 远端 ============ */
+function applyRemote(op) {
+  const eid = op.elementId;
+  if (op.type === 'DELETE') { const s = cards.get(eid); if (s) { s.el.remove(); cards.delete(eid); } return; }
+  if (op.type === 'ADD') { if (op.elementType === 'CARD') { ensureCard(eid, {}); $('hint').style.display='none'; } return; }
+  if (op.type === 'PUT') {
+    const rec = cards.get(eid);
+    if (!rec) return;
+    if (rec.dragging || rec.resizing) return;   // 本地拖动中：远端旧时钟值不回跳
+    const f = {}; f[op.field] = op.value;
+    applyFields(eid, f, false);
+  }
+}
+
+/* ============ 白板列表 ============ */
+async function refreshList() {
+  try {
+    const list = await (await fetch('/api/docs')).json();
+    const sel = $('boardSel');
+    sel.innerHTML = '';
+    list.forEach(d => {
+      const o = document.createElement('option');
+      o.value = d.doc_key;
+      o.textContent = (d.title || '(未命名)') + ' ' + d.doc_key.slice(0, 6);
+      sel.appendChild(o);
+    });
+    if (!curDoc && list.length) sel.value = list[0].doc_key;
+  } catch (e) {}
+}
+async function newBoard() {
+  const t = prompt('新白板名称', '白板 ' + new Date().toLocaleTimeString().slice(0,5));
+  if (t === null) return;
+  const r = await fetch('/api/docs', { method:'POST', headers:{'Content-Type':'application/json'},
+                                       body: JSON.stringify({ title: t }) });
+  const d = await r.json();
+  await refreshList();
+  connect(d.docKey);
+}
+
+/* boot */
+$('meTag').textContent = '本机 ' + me.slice(0, 6);
+refreshList();
+const q = new URLSearchParams(location.search).get('doc');
+if (q) connect(q);
+console.log('board ready');
+</script>
+</body>
+</html>
