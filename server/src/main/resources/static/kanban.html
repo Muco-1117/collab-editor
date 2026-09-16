@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>协同工作台 · 看板</title>
+<style>
+  :root { --bg:#f7f8fa; --card:#fff; --line:#e3e6eb; --ink:#1f2329; --mut:#8a919f; --acc:#3b82f6; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.6 system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+         background:var(--bg); color:var(--ink); }
+  header { display:flex; align-items:center; gap:12px; padding:10px 20px; background:var(--card);
+           border-bottom:1px solid var(--line); }
+  header h1 { font-size:16px; margin:0; font-weight:600; }
+  .tag { font-size:12px; color:var(--mut); }
+  .btn { border:1px solid var(--line); background:#fff; border-radius:6px; padding:5px 12px;
+         cursor:pointer; font-size:13px; }
+  .btn.primary { background:var(--acc); border-color:var(--acc); color:#fff; }
+  #board { display:flex; gap:14px; align-items:flex-start; overflow-x:auto; padding:20px; min-height:calc(100vh - 52px); }
+  .col { width:262px; flex:none; background:#eceff3; border-radius:12px; padding:8px 8px 10px;
+         display:flex; flex-direction:column; gap:8px; max-height:calc(100vh - 100px); }
+  .col.over { outline:2px dashed var(--acc); outline-offset:-2px; background:#e6eefc; }
+  .col .head { display:flex; align-items:center; gap:4px; padding:2px 4px; }
+  .col .title { flex:1; font-weight:600; font-size:14px; outline:none; border-radius:4px; padding:2px 6px; }
+  .col .title:hover { background:#e8ecf1; }
+  .col .del-col { border:0; background:none; color:#c3c8d1; cursor:pointer; font-size:13px; padding:0 4px; }
+  .col .del-col:hover { color:#e5484d; }
+  .col .cards { display:flex; flex-direction:column; gap:8px; overflow-y:auto; min-height:20px; flex:1; }
+  .card-kanban { background:var(--card); border:1px solid var(--line); border-radius:10px;
+                 padding:9px 10px; box-shadow:0 1px 3px rgba(20,30,60,.06); }
+  .card-kanban .body { outline:none; white-space:pre-wrap; word-break:break-all; font-size:13.5px; min-height:1.2em; }
+  .card-kanban .body:empty::before { content:'空白卡片'; color:#c3c8d1; }
+  .card-kanban .del { float:right; border:0; background:none; color:#c3c8d1; cursor:pointer; font-size:12px;
+                      padding:0 2px; margin-left:4px; display:none; }
+  .card-kanban:hover .del { display:inline; }
+  .card-kanban .del:hover { color:#e5484d; }
+  .card-kanban.dragging { opacity:.35; }
+  .card-placeholder { border:1.5px dashed #b7c3d8; border-radius:10px; min-height:34px; }
+  .col .add-card { border:0; background:none; color:var(--mut); cursor:pointer; font-size:13px;
+                   padding:6px 8px; border-radius:8px; text-align:left; }
+  .col .add-card:hover { background:#e6eaee; color:var(--acc); }
+  button + .col { }
+  #addCol { }
+  #hint { position:absolute; left:50%; top:44%; transform:translate(-50%,-50%); color:#aab1bd; text-align:center; }
+  #hint b { display:block; font-size:15px; margin-bottom:6px; color:#8a919f; }
+  #status { position:fixed; right:14px; bottom:12px; font-size:12px; color:var(--mut);
+            background:rgba(255,255,255,.9); border:1px solid var(--line); border-radius:8px; padding:4px 10px; }
+  #log { position:fixed; left:14px; bottom:12px; font-size:11px; color:#9aa3b2; max-width:420px;
+         max-height:64px; overflow:auto; background:rgba(255,255,255,.92); border:1px solid var(--line);
+         border-radius:8px; padding:4px 10px; display:none; }
+  .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; }
+  .dot.on { background:#23c55e; } .dot.off { background:#e5484d; }
+</style>
+</head>
+<body>
+<header>
+  <h1>协同看板<span class="tag">T0+7 · 列与卡片拖拽实时同步</span></h1>
+  <button class="btn" onclick="newBoard()">＋ 新建看板</button>
+  <select class="btn" id="docSel" onchange="connect(this.value)"></select>
+  <button class="btn primary" id="addColBtn" onclick="addColumn()" disabled>＋ 添加列</button>
+  <span class="tag" id="meTag"></span>
+</header>
+<div id="board">
+  <div id="hint" style="display:none"><b>先「＋ 添加列」创建第一列</b>拖动卡片换列/排序 · 双击文字编辑 · ✕ 删卡</div>
+</div>
+<div id="status"><span class="dot off" id="dot"></span><span id="statText">未连接</span></div>
+<div id="log"></div>
+
+<script>
+'use strict';
+const me = 'k' + Math.random().toString(36).slice(2, 9);
+let ws = null, rev = 0, curDoc = null, lamport = 0;
+const cols = new Map();                        // colId -> {el, order}
+const cards = new Map();                       // cardId -> {el, colId, order}
+const $ = id => document.getElementById(id);
+const clock = () => `${me}:${++lamport}`;
+const log = s => { $('log').style.display = 'block'; $('log').textContent += '> ' + s + '\n'; $('log').scrollTop = 1e9; };
+const stat = t => $('statText').textContent = t;
+const setDot = on => $('dot').className = 'dot ' + (on ? 'on' : 'off');
+
+/* ============ WS ============ */
+function connect(docKey) {
+  if (!docKey) return;
+  if (ws) { ws.onclose = null; ws.close(); }
+  curDoc = docKey;
+  rev = 0;
+  cols.forEach(c => c.el.remove()); cols.clear();
+  cards.forEach(c => c.el.remove()); cards.clear();
+  ws = new WebSocket((location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/ws/collab');
+  ws.onopen = () => send({ type:'hello', docId:curDoc, clientId:me, hostname:'kanban', lastRev:0 });
+  ws.onmessage = ev => { try { onMsg(JSON.parse(ev.data)); } catch(e){ log('坏帧'); } };
+  ws.onclose = () => setDot(false);
+  ws.onerror = () => log('连接错误');
+}
+const send = o => ws && ws.readyState === 1 && ws.send(JSON.stringify(o));
+const sendOp = (op, docId = curDoc) => send({ type:'op', docId, clientId:me, baseRev:rev, op });
+const sendPut = (eid, etype, field, value) => sendOp({ type:'PUT', elementId:eid, elementType:etype, field, value, clock:clock() });
+
+function onMsg(m) {
+  switch (m.type) {
+    case 'welcome': setDot(true); render(m.snapshot||[]); rev = m.rev; stat('已连接 rev=' + rev); break;
+    case 'incremental': (m.ops||[]).forEach(o => applyRemote(o)); rev = m.rev; break;
+    case 'applied':
+      rev = m.rev;
+      if (m.clientId !== me) applyRemote(m.op);
+      break;
+    case 'presence': stat('rev=' + rev + ' · 在线 ' + (m.members||[]).length + ' 人'); break;
+  }
+}
+
+/* ============ 渲染 ============ */
+function render(snap) {
+  (snap||[]).forEach(el => {
+    const f = unpack(el.fields || {});
+    if (el.type === 'COLUMN') ensureCol(el.id, f);
+    else if (el.type === 'CARD') ensureCard(el.id, f);
+  });
+  reorderAll();
+  $('hint').style.display = cols.size ? 'none' : 'block';
+  $('addColBtn').style.display = cols.size ? '' : 'none';
+  refreshList();
+}
+function unpack(fields) {
+  const out = {};
+  Object.entries(fields).forEach(([k,v]) => { out[k] = v && typeof v === 'object' && 'value' in v ? v.value : v; });
+  return out;
+}
+function ensureCol(eid, f) {
+  let rec = cols.get(eid);
+  if (!rec) {
+    const el = document.createElement('div');
+    el.className = 'col';
+    el.dataset.eid = eid;
+    el.innerHTML = '<div class="head"><div class="title" contenteditable="true" spellcheck="false"></div>'
+      + '<button class="del-col" title="删除列">✕</button></div>'
+      + '<div class="cards"></div><button class="add-card">＋ 添加卡片</button>';
+    bindCol(el);
+    $('board').appendChild(el);
+    rec = { el, order: 0 };
+    cols.set(eid, rec);
+  }
+  const title = rec.el.querySelector('.title');
+  if (document.activeElement !== title && f.title != null && title.textContent !== String(f.title)) {
+    title.textContent = String(f.title);
+  }
+  if (f.order != null) rec.order = +f.order;
+  return rec;
+}
+function ensureCard(eid, f) {
+  let rec = cards.get(eid);
+  if (!rec) {
+    const el = document.createElement('div');
+    el.className = 'card-kanban';
+    el.dataset.eid = eid;
+    const del = document.createElement('button');
+    del.className = 'del'; del.textContent = '✕'; del.title = '删除卡片';
+    const body = document.createElement('div');
+    body.className = 'body'; body.contentEditable = true; body.spellcheck = false;
+    el.append(del, body);
+    bindCard(el, body, del);
+    rec = { el, col: null, order: 0 };
+    cards.set(eid, rec);
+  }
+  const body = rec.el.querySelector('.body');
+  if (document.activeElement !== body && f.text != null && body.textContent !== String(f.text)) {
+    body.textContent = String(f.text);
+  }
+  if (f.order != null) rec.order = +f.order;
+  updateCardCol(eid, f.column != null ? String(f.column) : null);
+  return rec;
+}
+function updateCardCol(eid, colId) {
+  const rec = cards.get(eid);
+  if (!rec) return;
+  if (rec.col === colId && rec.el.parentElement && rec.el.parentElement.classList.contains('cards')) return;
+  rec.col = colId;
+  const target = colId && cols.get(colId) ? cols.get(colId).el.querySelector('.cards') : null;
+  if (target) target.appendChild(rec.el);
+  reorderIn(target || null);
+}
+function reorderAll() {
+  const sortedCols = [...cols.entries()].sort((a,b) => a[1].order - b[1].order || (a[0]<b[0]?-1:1));
+  sortedCols.forEach(([eid]) => {
+    const cel = cols.get(eid).el;
+    cel.remove();
+    $('board').appendChild(cel);
+    reorderIn(cel.querySelector('.cards'));
+  });
+  if (cols.size) $('hint').style.display = 'none';
+}
+function reorderIn(cardsEl) {
+  if (!cardsEl) return;
+  const byCardOrder = (a, b) => ((cards.get(a.dataset.eid) || {}).order || 0)
+    - ((cards.get(b.dataset.eid) || {}).order || 0);
+  [...cardsEl.children].filter(x => x.classList.contains('card-kanban'))
+    .sort(byCardOrder).forEach(cl => { cl.remove(); cardsEl.appendChild(cl); });
+}
+
+/* ============ 交互 ============ */
+function bindCol(el) {
+  const colId = el.querySelector('.title');
+  colId.addEventListener('input', () => {
+    clearTimeout(colId._t);
+    colId._t = setTimeout(() => {
+      sendPut(el.dataset.eid, 'COLUMN', 'title', colId.textContent);
+    }, 300);
+  });
+  el.querySelector('.del-col').onclick = () => {
+    if (!confirm('删除整列及其全部卡片？')) return;
+    const id = el.dataset.eid;
+    cards.forEach((c, cid) => { if (c.col === id) sendOp({ type:'DELETE', elementId:cid, elementType:'CARD', clock:clock() }); });
+    sendOp({ type:'DELETE', elementId:id, elementType:'COLUMN', clock:clock() });
+  };
+  el.querySelector('.add-card').onclick = () => addCard(el);
+}
+function addCard(colEl) {
+  const colId = colEl.dataset.eid;
+  const eid = 'card-' + Math.random().toString(36).slice(2, 10);
+  const cids = [...cards.values()].filter(c => c.col === colId).map(c => c.order);
+  const order = cids.length ? Math.max(...cids) + 1 : 1;
+  sendOp({ type:'ADD', elementId:eid, elementType:'CARD', clock:clock() });
+  sendPut(eid, 'CARD', 'column', colId);
+  sendPut(eid, 'CARD', 'order', order);
+  const rec = ensureCard(eid, { column: colId, order });
+  const cardsEl = colEl.querySelector('.cards');
+  cardsEl.appendChild(rec.el);
+  reorderIn(cardsEl);
+  rec.el.querySelector('.body').focus();
+}
+function btnColumn() {
+  const eid = 'col-' + Math.random().toString(36).slice(2, 10);
+  const order = cols.size ? Math.max(...[...cols.values()].map(c => c.order)) + 1 : 1;
+  sendOp({ type:'ADD', elementId:eid, elementType:'COLUMN', clock:clock() });
+  sendPut(eid, 'COLUMN', 'title', '新列');
+  sendPut(eid, 'COLUMN', 'order', order);
+  const rec = ensureCol(eid, { title:'新列', order });
+  rec.el.querySelector('.title').focus();
+  document.getSelection().selectAllChildren(rec.el.querySelector('.title'));
+}
+
+/* 卡片拖拽（换列/排序） */
+let dragRec = null;
+function bindCard(el, body, del) {
+  del.onclick = ev => { ev.stopPropagation(); sendOp({ type:'DELETE', elementId:el.dataset.eid, elementType:'CARD', clock:clock() }); };
+  body.addEventListener('mousedown', ev => ev.stopPropagation());
+  body.addEventListener('input', () => {
+    clearTimeout(body._t);
+    body._t = setTimeout(() => sendPut(el.dataset.eid, 'CARD', 'text', body.textContent), 250);
+  });
+  /* 拖拽把手：卡片空白区（非文字区） */
+  el.addEventListener('mousedown', ev => {
+    if (ev.target === body) return;
+    ev.preventDefault();
+    const rec = cards.get(el.dataset.eid);
+    if (!rec || dragRec) return;
+    dragRec = rec;
+    el.classList.add('dragging');
+    const ph = document.createElement('div');
+    ph.className = 'card-placeholder';
+    ph.style.minHeight = el.offsetHeight + 'px';
+    el.parentElement.insertBefore(ph, el);
+    const mv = ev2 => {
+      el.style.position = 'fixed';
+      el.style.left = (ev2.clientX + 6) + 'px';
+      el.style.top = (ev2.clientY + 6) + 'px';
+      el.style.width = '240px';
+      el.style.zIndex = 999;
+      el.style.pointerEvents = 'none';
+      el.style.margin = '0';
+      const under = document.elementFromPoint(ev2.clientX, ev2.clientY);
+      document.querySelectorAll('.col').forEach(c => c.classList.remove('over'));
+      const colEl = under ? under.closest('.col') : null;
+      if (colEl) colEl.classList.add('over');
+    };
+    const up = ev2 => {
+      document.querySelectorAll('.col').forEach(c => c.classList.remove('over'));
+      const under = document.elementFromPoint(ev2.clientX, ev2.clientY);
+      const colEl = under ? under.closest('.col') : null;
+      let newCol = null, newOrder = null;
+      if (colEl) {
+        newCol = colEl.dataset.eid;
+        const cardsEl = colEl.querySelector('.cards');
+        const list = [...cardsEl.querySelectorAll('.card-kanban')].filter(x => x !== el);
+        let idx = list.length;
+        for (let i = 0; i < list.length; i++) {
+          const r = list[i].getBoundingClientRect();
+          if (ev2.clientY < r.top + r.height / 2) { idx = i; break; }
+        }
+        const prev = idx - 1 >= 0 ? (cards.get(list[idx-1].dataset.eid)?.order??0) : 0;
+        const next = idx < list.length ? (cards.get(list[idx].dataset.eid)?.order??0) : null;
+        newOrder = next == null ? prev + 1 : (prev + next) / 2;
+      }
+      // 还原
+      el.classList.remove('dragging');
+      el.style.position = ''; el.style.left = ''; el.style.top = ''; el.style.width = '';
+      el.style.zIndex = ''; el.style.pointerEvents = ''; el.style.margin = '';
+      ph.remove();
+      if (newCol) {
+        sendPut(el.dataset.eid, 'CARD', 'column', newCol);
+        sendPut(el.dataset.eid, 'CARD', 'order', Math.round(newOrder * 100) / 100);
+        updateCardCol(el.dataset.eid, newCol);
+        cards.get(el.dataset.eid).order = Math.round(newOrder * 100) / 100;
+        reorderIn(cols.get(newCol).el.querySelector('.cards'));
+      }
+      dragRec = null;
+      window.removeEventListener('mousemove', mv);
+      window.removeEventListener('mouseup', up);
+    };
+    window.addEventListener('mousemove', mv);
+    window.addEventListener('mouseup', up);
+  });
+}
+
+/* ============ 远端 ============ */
+function applyRemote(op) {
+  const eid = op.elementId;
+  if (op.type === 'DELETE') {
+    const c = cards.get(eid);
+    if (c) { c.el.remove(); cards.delete(eid); }
+    const k = cols.get(eid);
+    if (k) { k.el.remove(); cols.delete(eid); }
+    reorderAll();
+    return;
+  }
+  if (op.type === 'ADD') {
+    if (op.elementType === 'COLUMN') ensureCol(eid, {});
+    if (op.elementType === 'CARD') ensureCard(eid, {});
+    reorderAll();
+    return;
+  }
+  if (op.type === 'PUT') {
+      if (dragRec && dragRec.el.dataset.eid === eid) return;
+    if (op.elementType === 'COLUMN' && cols.has(eid)) {
+      const f = {}; f[op.field] = op.value;
+      if (op.field === 'title') ensureCol(eid, f);
+      else { cols.get(eid).order = +op.value; reorderAll(); }
+    } else if (op.elementType === 'CARD' && cards.has(eid)) {
+      const f = {}; f[op.field] = op.value;
+      ensureCard(eid, f);
+      reorderAll();
+    }
+  }
+}
+
+/* ============ 列表 ============ */
+async function refreshList() {
+  try {
+    const list = await (await fetch('/api/docs')).json();
+    const sel = $('docSel');
+    sel.innerHTML = '';
+    list.forEach(d => {
+      const o = document.createElement('option');
+      o.value = d.doc_key;
+      o.textContent = (d.title || '(未命名)') + ' ' + d.doc_key.slice(0, 6);
+      sel.appendChild(o);
+    });
+    if (!curDoc && list.length) sel.value = list[0].doc_key;
+  } catch (e) {}
+}
+async function newBoard() {
+  const t = prompt('新看板名称', '看板 ' + new Date().toLocaleTimeString().slice(0,5));
+  if (t === null) return;
+  const r = await fetch('/api/docs', { method:'POST', headers:{'Content-Type':'application/json'},
+                                       body: JSON.stringify({ title: t }) });
+  const d = await r.json();
+  await refreshList();
+  connect(d.docKey);
+}
+
+/* boot */
+$('meTag').textContent = '本机 ' + me.slice(0, 6);
+refreshList();
+const q = new URLSearchParams(location.search).get('doc');
+if (q) connect(q);
+console.log('kanban ready');
+</script>
+</body>
+</html>
