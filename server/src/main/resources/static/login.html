@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>登录 · 协同工作台</title>
+<script src="/auth.js"></script>
+<style>
+  :root { --bg:#f7f8fa; --card:#fff; --line:#e3e6eb; --ink:#1f2329; --mut:#8a919f; --acc:#3b82f6; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Microsoft YaHei", system-ui, sans-serif; background: var(--bg); color: var(--ink); min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .box { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 34px 30px; width: 340px; box-shadow: 0 6px 24px rgba(0,0,0,.06); }
+  h1 { font-size: 20px; text-align: center; margin-bottom: 4px; }
+  .sub { text-align: center; color: var(--mut); font-size: 13px; margin-bottom: 22px; }
+  label { display: block; font-size: 13px; color: var(--mut); margin: 12px 0 4px; }
+  input { width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; outline: none; }
+  input:focus { border-color: var(--acc); }
+  .btn { display: block; width: 100%; margin-top: 18px; padding: 10px; border: 0; border-radius: 8px; background: var(--acc); color: #fff; font-size: 15px; cursor: pointer; }
+  .btn:hover { opacity: .9; }
+  .tip { text-align: center; margin-top: 14px; font-size: 13px; color: var(--mut); }
+  .tip a { color: var(--acc); cursor: pointer; text-decoration: none; }
+  .err { color: #d93026; font-size: 13px; margin-top: 10px; min-height: 18px; text-align: center; }
+  .back { margin-top: 16px; text-align: center; font-size: 12px; color: var(--mut); }
+  .back a { color: var(--mut); }
+</style>
+</head>
+<body>
+  <div class="box card">
+    <h1>协同工作台</h1>
+    <div class="sub">登录后进入 文档 / 白板 / 看板</div>
+    <form id="form">
+      <label>用户名</label>
+      <input id="username" autocomplete="username" required>
+      <label>密码</label>
+      <input id="password" type="password" autocomplete="current-password" required>
+      <label id="nickLabel" style="display:none">昵称（可选）</label>
+      <input id="nickname" style="display:none" autocomplete="nickname">
+      <button class="btn" id="submitBtn" type="submit">登 录</button>
+    </form>
+    <div class="err" id="err"></div>
+    <div class="tip"><span id="switchText">没有账号？</span><a id="switch" href="javascript:void(0)">注册一个</a></div>
+    <div class="back"><a href="/">← 返回首页</a></div>
+  </div>
+<script>
+  const isReg = { v: false };
+  const $ = id => document.getElementById(id);
+
+  $('switch').onclick = () => {
+    isReg.v = !isReg.v;
+    $('nickLabel').style.display = isReg.v ? '' : 'none';
+    $('nickname').style.display = isReg.v ? '' : 'none';
+    $('submitBtn').textContent = isReg.v ? '注 册' : '登 录';
+    $('switchText').textContent = isReg.v ? '已有账号？' : '没有账号？';
+    $('switch').textContent = isReg.v ? '去登录' : '注册一个';
+  };
+
+  $('form').onsubmit = async ev => {
+    ev.preventDefault();
+    const u = $('username').value.trim(), p = $('password').value;
+    const nick = $('nickname').value.trim();
+    $('err').textContent = '';
+    const path = isReg.v ? '/api/auth/register' : '/api/auth/login';
+    const body = isReg.v ? JSON.stringify({ username: u, password: p, nickname: nick })
+                          : JSON.stringify({ username: u, password: p });
+    try {
+      const r = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+      const j = await r.json();
+      if (!r.ok) { $('err').textContent = j.msg || '请求失败'; return; }
+      window.auth.save(j.token, j.user);
+      location.href = '/';
+    } catch { $('err').textContent = '网络错误，请确认服务已启动'; }
+  };
+
+  // 已登录直接回首页
+  if (window.auth.token()) location.href = '/';
+</script>
+</body>
+</html>

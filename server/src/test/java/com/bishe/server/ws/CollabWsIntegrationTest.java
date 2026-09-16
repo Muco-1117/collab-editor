@@ -37,19 +37,25 @@ class CollabWsIntegrationTest {
     /** 独立测试文档（每次运行随机，避免库内历史干扰断言）。 */
     final String testDoc = "itest-" + java.util.UUID.randomUUID().toString().substring(0, 8);
 
-    /** 一个测试 WS 客户端：入站消息进 queue。 */
+    /** 一个测试 WS 客户端：入站消息进 queue。connect 自动带 JWT（无则现场注册）。 */
     static class TestClient {
         final LinkedBlockingQueue<String> inbox = new LinkedBlockingQueue<>();
         WebSocketSession session;
+        String tokenParam;
 
         void connect(URI uri) throws Exception {
+            String tk = tokenParam;
+            if (tk == null) {
+                tk = AuthTestSupport.token(uri.getPort(), "auto-" + java.util.UUID.randomUUID().toString().substring(0, 8));
+            }
+            URI authed = URI.create(uri.toString() + "?token=" + java.net.URLEncoder.encode(tk, "UTF-8"));
             StandardWebSocketClient client = new StandardWebSocketClient();
             session = client.execute(new TextWebSocketHandler() {
                 @Override
                 protected void handleTextMessage(WebSocketSession s, TextMessage m) {
                     inbox.offer(m.getPayload());
                 }
-            }, new WebSocketHttpHeaders(), uri).get(10, TimeUnit.SECONDS);
+            }, new WebSocketHttpHeaders(), authed).get(10, TimeUnit.SECONDS);
         }
 
         void send(String json) throws Exception {

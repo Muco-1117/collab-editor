@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>协同工作台 · 白板</title>
+<script src="/auth.js"></script>
 <style>
   :root { --bg:#f7f8fa; --card:#fff; --line:#e3e6eb; --ink:#1f2329; --mut:#8a919f; --acc:#3b82f6; }
   * { box-sizing: border-box; }
@@ -57,6 +58,7 @@
 
 <script>
 'use strict';
+window.auth.guard();
 const me = 'b' + Math.random().toString(36).slice(2, 9);
 let ws = null, rev = 0, curDoc = null, lamport = 0;
 const cards = new Map();                        // eid -> {el, dragging, resizing}
@@ -74,7 +76,7 @@ function connect(docKey) {
   rev = 0;
   cards.forEach(r => r.el.remove()); cards.clear();
   $('hint').style.display = 'block';
-  ws = new WebSocket((location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/ws/collab');
+  ws = new WebSocket(window.auth.wsUrl('/ws/collab'));
   ws.onopen = () => send({ type:'hello', docId:curDoc, clientId:me, hostname:'board', lastRev:0 });
   ws.onmessage = ev => { try { onMsg(JSON.parse(ev.data)); } catch(e){ log('坏帧'); } };
   ws.onclose = () => setDot(false);

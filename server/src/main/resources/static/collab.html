@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <title>协同演示台（T0+3 实时层）</title>
+<script src="/auth.js"></script>
 <style>
   body { font-family: system-ui, sans-serif; margin: 0; padding: 20px; background: #f7f8fa; }
   h1 { font-size: 20px; }
@@ -42,11 +43,12 @@ function log(s) {
 }
 
 function connect() {
+  if (!window.auth.token()) { location.href = '/login.html'; return; }
   docId = $('docId').value.trim() || 'demo-doc-1';
   me = $('nick').value.trim() || 'w' + Math.random().toString(36).slice(2, 7) + '-' + Math.random().toString(36).slice(0, 3);
   $('connect').disabled = true; $('clear').disabled = false; $('editor').disabled = false;
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  ws = new WebSocket(`${proto}://${location.host}/ws/collab`);
+  ws = new WebSocket(window.auth.wsUrl('/ws/collab'));
   ws.onopen = () => {
     // 断线重连：带 lastRev —— 服务端补发错过的操作（增量同步）
     ws.send(JSON.stringify({ type: 'hello', docId, clientId: me, hostname: me, lastRev: rev }));

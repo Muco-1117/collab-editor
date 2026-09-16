@@ -13,13 +13,17 @@ import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry
 public class WebSocketConfig implements WebSocketConfigurer {
 
     private final CollabSocketHandler handler;
+    private final TokenHandshakeInterceptor tokenGuard;
 
-    public WebSocketConfig(CollabSocketHandler handler) {
+    public WebSocketConfig(CollabSocketHandler handler, TokenHandshakeInterceptor tokenGuard) {
         this.handler = handler;
+        this.tokenGuard = tokenGuard;
     }
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
-        registry.addHandler(handler, "/ws/collab").setAllowedOriginPatterns("*");
+        registry.addHandler(handler, "/ws/collab")
+                .addInterceptors(tokenGuard)
+                .setAllowedOriginPatterns("*");
     }
 }

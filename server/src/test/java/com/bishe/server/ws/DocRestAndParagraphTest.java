@@ -32,6 +32,16 @@ class DocRestAndParagraphTest {
     final ObjectMapper mapper = new ObjectMapper();
     final String testDoc = "doctest-" + java.util.UUID.randomUUID().toString().substring(0, 8);
 
+    /** 每个测试先注册登录，给所有 REST 请求自动带 Bearer。 */
+    @org.junit.jupiter.api.BeforeEach
+    void auth() throws Exception {
+        String token = AuthTestSupport.token(port, "doc-" + java.util.UUID.randomUUID().toString().substring(0, 8));
+        rest.getRestTemplate().getInterceptors().add((req, body, exec) -> {
+            req.getHeaders().setBearerAuth(token);
+            return exec.execute(req, body);
+        });
+    }
+
     /* ---------------- REST：文档 CRUD ---------------- */
 
     @Test

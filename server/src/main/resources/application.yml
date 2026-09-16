@@ -17,6 +17,11 @@ management:
       exposure:
         include: health,info
 
+app:
+  jwt:
+    secret: ${JWT_SECRET:bishe-collab-dev-secret-change-me-in-prod-0123456789abcdef}
+    expire-hours: 168
+
 logging:
   level:
     com.bishe: INFO

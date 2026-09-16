@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>协同工作台 · 入口</title>
+<script src="/auth.js"></script>
 <style>
   :root { --bg:#f7f8fa; --card:#fff; --line:#e3e6eb; --ink:#1f2329; --mut:#8a919f; --acc:#3b82f6; }
   * { box-sizing:border-box; }
@@ -12,6 +13,11 @@
                     radial-gradient(circle at 80% 80%, #edf7f0, transparent 50%), var(--bg);
          font:15px/1.7 system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
          color:var(--ink); }
+  .button { padding:2px 12px; border:1px solid var(--line); border-radius:99px; background:var(--card);
+            font-size:12px; cursor:pointer; text-decoration:none; color:var(--ink); }
+  .button:hover { border-color:var(--acc); color:var(--acc); }
+  .userbar { text-align:right; margin-bottom:14px; font-size:13px; color:var(--mut); }
+  .userbar b { color:var(--ink); }
   .wrap { max-width:860px; width:92%; padding:40px 0; }
   h1 { font-size:26px; font-weight:700; margin:0 0 6px; }
   .sub { color:var(--mut); margin-bottom:30px; }
@@ -31,6 +37,7 @@
 </head>
 <body>
 <div class="wrap">
+  <div class="userbar" id="userbar">…</div>
   <h1>协同工作台 <span class="stage done">运行中</span></h1>
   <p class="sub">基于自研协同引擎（Lamport 时钟 + LWW 合并）的多人实时协作应用 · M2 前段</p>
   <div class="grid">
@@ -60,10 +67,23 @@
     </a>
   </div>
   <div class="so" style="margin-top:26px">
-    💡 体验方式：开两个标签页进入同一应用，一边输入/拖拽，另一边实时同步；
+    💡 体验方式：先<a href="/login.html" style="color:var(--acc)">登录</a>，然后开两个标签页进入同一应用，一边输入/拖拽，另一边实时同步；
     刷新或拔网重连后增量补回；重启后端服务数据也不丢（MySQL 持久化）。
     <br>5173 为 Vue 前端脚手架（占位），当前页面由后端 8080 直接托管。
   </div>
 </div>
+<script>
+  (async () => {
+    const u = await window.auth.me();
+    const bar = document.getElementById('userbar');
+    if (u) {
+      bar.innerHTML = '👤 <b>' + (u.nickname || u.username) + '</b> · ' + (u.role || 'editor')
+        + ' <a class="button" id="logout" href="javascript:void(0)" style="margin-left:8px">退出登录</a>';
+      document.getElementById('logout').onclick = () => { auth.clear(); location.reload(); };
+    } else {
+      bar.innerHTML = '<a class="button" href="/login.html">登录 / 注册</a>';
+    }
+  })();
+</script>
 </body>
 </html>
