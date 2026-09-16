@@ -4,6 +4,12 @@ server:
 spring:
   application:
     name: collab-editor-server
+  # 数据库连接（凭据不落 git：本地用 application-local.yml override）
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/collab_editor?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: ${DB_USER:root}
+    password: ${DB_PASSWORD:}
 
 management:
   endpoints:

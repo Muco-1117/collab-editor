@@ -2,6 +2,10 @@ package com.bishe.server.ws;
 
 import com.bishe.engine.DocState;
 import com.bishe.engine.Op;
+import com.bishe.server.store.OpStore;
+import com.bishe.engine.Element;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -11,23 +15,50 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * 协同房间：一个 docId 一个 room。
  *
- * <p>组成：一份服务端状态（引擎并发合并）+ append-only Op 日志（T0+4 直接落
- * MySQL 成为 operation_log 表）+ 在场会话集合。rev 为日志位置（服务端顺序），
- * 断线重连：Join 时带 lastRev → 从日志回放弥补（增量同步）；日志清空前的
- * 全量兜底由 welcome 快照承担。
+ * <p>持久化策略（T0+4）：
+ * 启动/首次进入 → OpStore 恢复（最近快照 + 其后 op 日志回放）；
+ * applyOp → 内存状态 + operation_log 追加（rev=seq 单调）；
+ * 每 {@link #SNAPSHOT_INTERVAL} 条 op 打一次快照（DB 侧压缩，内存日志保留
+ * 供任意 rev 增量续传）。
  */
 public final class CollabRoom {
 
+    private static final Logger log = LoggerFactory.getLogger(CollabRoom.class);
+    private static final int SNAPSHOT_INTERVAL = 64;
+
     private final String docId;
+    private final OpStore store;
     private final DocState state;
     private final List<Op> ops = new ArrayList<>();
     private final Object opsLock = new Object();
     private final AtomicLong revSeq = new AtomicLong(0);
     private final ConcurrentHashMap<String, CollabSession> sessions = new ConcurrentHashMap<>();
 
-    public CollabRoom(String docId) {
+    public CollabRoom(String docId, OpStore store) {
         this.docId = docId;
-        this.state = new DocState("server:" + docId);
+        this.store = store;
+        // —— 恢复：快照 + 日志回放 ——
+        DocState restored = new DocState("server:" + docId);
+        long restoredFrom = 0;
+        OpStore.Snapshot snap = store.latestSnapshot(docId);
+        if (snap.present()) {
+            DocState snapState = new DocState("server:snap:" + docId);
+            snap.elements().forEach(snapState::putRestoredElement);
+            restored.mergeState(snapState);
+            restoredFrom = snap.rev();
+            log.info("恢复[{}]：快照 rev={} elements={}", docId, snap.rev(), snap.elements().size());
+        }
+        List<Op> tail = store.loadOpsAfter(docId, restoredFrom);
+        tail.forEach(restored::apply);
+        this.state = restored;
+        synchronized (opsLock) {
+            ops.addAll(store.loadOpsAfter(docId, 0));   // 全量日志（含快照前，供任意点增量）
+            revSeq.set(store.maxSeq(docId));
+        }
+        if (!tail.isEmpty() || restoredFrom > 0) {
+            log.info("恢复房间[{}]：日志回放 [{}..{}]，当前 rev={}", docId, restoredFrom,
+                    restoredFrom + tail.size(), revSeq.get());
+        }
     }
 
     public String docId() {
@@ -42,19 +73,23 @@ public final class CollabRoom {
         return revSeq.get();
     }
 
-    /** 接收并应用一条操作：先进状态再广播（含作者本人，便于本地回执对齐）。 */
+    /** 接收并应用一条操作：顺序 = 服务端到达序（DB seq），再广播全体。 */
     public void applyOp(Op op) {
         state.apply(op);
         final long rev;
         synchronized (opsLock) {
             ops.add(op);
             rev = revSeq.incrementAndGet();
+            store.appendOps(docId, List.of(op), rev);
         }
         String msg = CollabMessage.applied(rev, op);
         sessions.values().forEach(s -> s.send(msg));
+        if (rev % SNAPSHOT_INTERVAL == 0) {
+            store.saveSnapshot(docId, rev, OpStore.encodeElements(new ArrayList<>(state.elements().values())));
+        }
     }
 
-    /** (lastRev, rev] 区间增量 op。 */
+    /** (lastRev, rev] 区间增量 op；lastRev 超窗口（被快照吞没）时返回 null 由调用方回退全量。 */
     public List<Op> opsAfter(long lastRev) {
         synchronized (opsLock) {
             if (lastRev >= ops.size()) {

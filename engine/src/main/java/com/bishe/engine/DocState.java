@@ -39,6 +39,11 @@ public final class DocState {
         return elements.get(id);
     }
 
+    /** 快照恢复用：把已反序列化的元素整体放入状态（不比对时钟，快照即权威）。 */
+    public void putRestoredElement(Element el) {
+        elements.put(el.id(), el);
+    }
+
     /** 应用一条操作（幂等、可乱序）。 */
     public void apply(Op op) {
         switch (op.type()) {

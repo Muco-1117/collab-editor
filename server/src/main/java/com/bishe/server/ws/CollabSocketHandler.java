@@ -1,5 +1,6 @@
 package com.bishe.server.ws;
 
+import com.bishe.server.store.OpStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
@@ -24,7 +25,12 @@ public class CollabSocketHandler extends TextWebSocketHandler {
 
     private static final Logger log = LoggerFactory.getLogger(CollabSocketHandler.class);
     private final ObjectMapper mapper = new ObjectMapper();
+    private final OpStore store;
     private final ConcurrentHashMap<String, CollabRoom> rooms = new ConcurrentHashMap<>();
+
+    public CollabSocketHandler(OpStore store) {
+        this.store = store;
+    }
 
     /** 任意连接：按 room 挂载。doc 未开房则自动创建。 */
     @Override
@@ -44,7 +50,7 @@ public class CollabSocketHandler extends TextWebSocketHandler {
                     ws.getAttributes().put("joined", Boolean.TRUE);
                 }
                 String clientId = req.clientId().isBlank() ? ws.getId() : req.clientId();
-                room = rooms.computeIfAbsent(req.docId(), CollabRoom::new);
+                room = rooms.computeIfAbsent(req.docId(), id -> new CollabRoom(id, store));
                 ws.getAttributes().put("room", room);
 
                 CollabSession ses = new CollabSession(clientId, req.hostname(), ws);

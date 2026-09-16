@@ -47,9 +47,9 @@ CREATE TABLE IF NOT EXISTS `document` (
 -- 元素快照表（T0-4：定时快照 + op 日志回放恢复）
 CREATE TABLE IF NOT EXISTS `element_snapshot` (
   `id`          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  `doc_id`      BIGINT UNSIGNED NOT NULL,
-  `rev`         BIGINT UNSIGNED NOT NULL COMMENT '快照版本',
-  `data_json`   MEDIUMTEXT NOT NULL COMMENT '元素集序列化',
+  `doc_id`      VARCHAR(64)  NOT NULL,
+  `rev`         BIGINT UNSIGNED NOT NULL COMMENT '快照版本（= 该时刻服务端 seq）',
+  `elements_json` MEDIUMTEXT NOT NULL COMMENT '元素集序列化（OpStore.encodeElements）',
   `created_at`  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY `uk_doc_rev` (`doc_id`, `rev`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='元素快照';
@@ -57,12 +57,12 @@ CREATE TABLE IF NOT EXISTS `element_snapshot` (
 -- 操作日志（append-only，回放依据）
 CREATE TABLE IF NOT EXISTS `operation_log` (
   `id`          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  `doc_id`      BIGINT UNSIGNED NOT NULL,
-  `element_id`  VARCHAR(40)  NOT NULL DEFAULT '',
+  `doc_id`      VARCHAR(64)  NOT NULL,
+  `element_id`  VARCHAR(64)  NOT NULL DEFAULT '',
   `field`       VARCHAR(64)  NOT NULL DEFAULT '',
   `value_json`  TEXT,
-  `clock`       VARCHAR(64)  NOT NULL COMMENT 'Lamport 时钟 replicaId:counter',
-  `seq`         BIGINT UNSIGNED NOT NULL COMMENT '服务端顺序号',
+  `clock`       VARCHAR(64)  NOT NULL COMMENT 'OpType|Lamport 时钟 replicaId:counter',
+  `seq`         BIGINT UNSIGNED NOT NULL COMMENT '服务端顺序号（每 doc 单调）',
   `created_at`  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  KEY `idx_doc_seq` (`doc_id`, `seq`)
+  UNIQUE KEY `uk_doc_seq` (`doc_id`, `seq`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='操作日志（append-only）';

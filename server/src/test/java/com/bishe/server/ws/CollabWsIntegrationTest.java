@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketHttpHeaders;
 import org.springframework.web.socket.WebSocketSession;
@@ -26,12 +27,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * 3) B 断开期间 A 再发 op → B 重连(lastRev) → 增量补发 incremental
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@ActiveProfiles("local")
 class CollabWsIntegrationTest {
 
     @LocalServerPort
     int port;
 
     final ObjectMapper mapper = new ObjectMapper();
+    /** 独立测试文档（每次运行随机，避免库内历史干扰断言）。 */
+    final String testDoc = "itest-" + java.util.UUID.randomUUID().toString().substring(0, 8);
 
     /** 一个测试 WS 客户端：入站消息进 queue。 */
     static class TestClient {
@@ -138,7 +142,7 @@ class CollabWsIntegrationTest {
     }
 
     private String jsonHello(String clientId, long lastRev) {
-        return "{\"type\":\"hello\",\"docId\":\"demo-doc-1\",\"clientId\":\"" + clientId
+        return "{\"type\":\"hello\",\"docId\":\"" + testDoc + "\",\"clientId\":\"" + clientId
                 + "\",\"hostname\":\"" + clientId + "\",\"lastRev\":" + lastRev + "}";
     }
 }
