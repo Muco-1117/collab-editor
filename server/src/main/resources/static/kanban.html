@@ -5,34 +5,49 @@
 <title>协同工作台 · 看板</title>
 <script src="/auth.js"></script>
 <style>
-  :root { --bg:#f7f8fa; --card:#fff; --line:#e3e6eb; --ink:#1f2329; --mut:#8a919f; --acc:#3b82f6; }
+  :root {
+    --bg:#f7f6f3; --card:#ffffff; --line:rgba(20,18,14,.09);
+    --ink:rgba(30,27,24,.92); --mut:#6f6960; --mutl:#a39e96;
+    --acc:#0a6cda; --acc2:#0059b5; --accbg:#f2f8ff; --ok:#1e9e58;
+    --shadow: rgba(30,27,20,.05) 0px 4px 18px, rgba(30,27,20,.035) 0px 2px 7.8px,
+              rgba(30,27,20,.025) 0px .8px 2.9px, rgba(30,27,20,.02) 0px .2px 1px;
+  }
   * { box-sizing:border-box; }
   body { margin:0; font:14px/1.6 system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
-         background:var(--bg); color:var(--ink); }
-  header { display:flex; align-items:center; gap:12px; padding:10px 20px; background:var(--card);
+         background:var(--bg); color:var(--ink); -webkit-font-smoothing:antialiased; }
+  header { position:sticky; top:0; z-index:40; display:flex; align-items:center; gap:10px;
+           padding:9px 20px; background:rgba(255,255,255,.88); backdrop-filter:blur(10px);
            border-bottom:1px solid var(--line); }
-  header h1 { font-size:16px; margin:0; font-weight:600; }
-  .tag { font-size:12px; color:var(--mut); }
-  .btn { border:1px solid var(--line); background:#fff; border-radius:6px; padding:5px 12px;
-         cursor:pointer; font-size:13px; }
-  .btn.primary { background:var(--acc); border-color:var(--acc); color:#fff; }
+  header .brand { display:flex; align-items:center; gap:8px; margin-right:6px; }
+  header .brand .logo { width:26px; height:26px; border-radius:7px; background:var(--acc); color:#fff;
+      display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; }
+  header .brand a { color:var(--mut); text-decoration:none; font-size:12.5px; margin-left:2px; }
+  header .brand a:hover { color:var(--acc); }
+  header h1 { font-size:15px; margin:0; font-weight:700; letter-spacing:-.2px; }
+  .tag { font-size:12.5px; color:var(--mut); }
+  .btn { border:1px solid var(--line); background:#fff; border-radius:7px; padding:5px 12px;
+         cursor:pointer; font-size:13px; transition:all .15s; color:var(--ink); }
+  .btn:hover { border-color:var(--acc); color:var(--acc); }
+  .btn.primary { background:var(--acc); border-color:var(--acc); color:#fff; font-weight:600; }
+  .btn.primary:hover { background:var(--acc2); color:#fff; }
   #board { display:flex; gap:14px; align-items:flex-start; overflow-x:auto; padding:20px; min-height:calc(100vh - 52px); }
-  .col { width:262px; flex:none; background:#eceff3; border-radius:12px; padding:8px 8px 10px;
+  .col { width:264px; flex:none; background:rgba(30,27,20,.045); border:1px solid rgba(30,27,20,.05);
+         border-radius:12px; padding:8px 8px 10px;
          display:flex; flex-direction:column; gap:8px; max-height:calc(100vh - 100px); }
-  .col.over { outline:2px dashed var(--acc); outline-offset:-2px; background:#e6eefc; }
+  .col.over { outline:2px dashed var(--acc); outline-offset:-2px; background:var(--accbg); }
   .col .head { display:flex; align-items:center; gap:4px; padding:2px 4px; }
   .col .title { flex:1; font-weight:600; font-size:14px; outline:none; border-radius:4px; padding:2px 6px; }
-  .col .title:hover { background:#e8ecf1; }
-  .col .del-col { border:0; background:none; color:#c3c8d1; cursor:pointer; font-size:13px; padding:0 4px; }
+  .col .title:hover { background:rgba(30,27,20,.07); }
+  .col .del-col { border:0; background:none; color:var(--mutl); cursor:pointer; font-size:13px; padding:0 4px; }
   .col .del-col:hover { color:#e5484d; }
   .col .cards { display:flex; flex-direction:column; gap:8px; overflow-y:auto; min-height:20px; flex:1; }
   .card-kanban { background:var(--card); border:1px solid var(--line); border-radius:10px;
-                 padding:9px 10px; box-shadow:0 1px 3px rgba(20,30,60,.06); }
-  .card-kanban .grip { padding:1px 6px 3px; font-size:11px; color:#aab2bf; cursor:grab;
-    border-bottom:1px dashed #e8ebf0; user-select:none; margin:-3px -4px 6px; border-radius:8px 8px 0 0; }
-  .card-kanban .grip:hover { background:#eef2f7; color:#5b6472; }
+                 padding:9px 10px; box-shadow:var(--shadow); }
+  .card-kanban .grip { padding:1px 6px 3px; font-size:11px; color:#a5adba; cursor:grab;
+    border-bottom:1px dashed #e9e7e2; user-select:none; margin:-3px -4px 6px; border-radius:8px 8px 0 0; }
+  .card-kanban .grip:hover { background:#f6f5f2; color:#5b6472; }
   .card-kanban .body { outline:none; white-space:pre-wrap; word-break:break-all; font-size:13.5px; min-height:1.2em; }
-  .card-kanban .body:empty::before { content:'空白卡片'; color:#c3c8d1; }
+  .card-kanban .body:empty::before { content:'空白卡片'; color:var(--mutl); }
   .card-kanban .del { float:right; border:0; background:none; color:#b9c0cd; cursor:pointer; font-size:13px;
                     padding:0 3px; margin-left:4px; }
   .card-kanban:hover .del, .card-kanban .del:hover { color:#e5484d; }
@@ -40,27 +55,27 @@
   .card-placeholder { border:1.5px dashed #b7c3d8; border-radius:10px; min-height:34px; }
   .col .add-card { border:0; background:none; color:var(--mut); cursor:pointer; font-size:13px;
                    padding:6px 8px; border-radius:8px; text-align:left; }
-  .col .add-card:hover { background:#e6eaee; color:var(--acc); }
-  button + .col { }
-  #addCol { }
-  #hint { position:absolute; left:50%; top:44%; transform:translate(-50%,-50%); color:#aab1bd; text-align:center; }
-  #hint b { display:block; font-size:15px; margin-bottom:6px; color:#8a919f; }
-  #status { position:fixed; right:14px; bottom:12px; font-size:12px; color:var(--mut);
-            background:rgba(255,255,255,.9); border:1px solid var(--line); border-radius:8px; padding:4px 10px; }
-  #log { position:fixed; left:14px; bottom:12px; font-size:11px; color:#9aa3b2; max-width:420px;
-         max-height:64px; overflow:auto; background:rgba(255,255,255,.92); border:1px solid var(--line);
-         border-radius:8px; padding:4px 10px; display:none; }
+  .col .add-card:hover { background:rgba(30,27,20,.08); color:var(--acc); }
+  #hint { position:absolute; left:50%; top:44%; transform:translate(-50%,-50%); color:var(--mutl); text-align:center; }
+  #hint b { display:block; font-size:15px; margin-bottom:6px; color:#8a837a; }
+  #status { position:fixed; right:16px; bottom:12px; font-size:12px; color:var(--mut);
+            background:rgba(255,255,255,.93); border:1px solid var(--line); border-radius:999px;
+            padding:5px 12px; box-shadow:var(--shadow); }
+  #log { position:fixed; left:16px; bottom:12px; font-size:11px; color:#98938b; max-width:420px;
+         max-height:64px; overflow:auto; background:rgba(255,255,255,.93); border:1px solid var(--line);
+         border-radius:9px; padding:4px 10px; display:none; }
   .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; }
-  .dot.on { background:#23c55e; } .dot.off { background:#e5484d; }
+  .dot.on { background:var(--ok); } .dot.off { background:#e5484d; }
 </style>
 </head>
 <body>
 <header>
-  <h1>协同看板 <span class="tag">列卡拖拽实时同步</span></h1>
+  <div class="brand"><span class="logo">协</span><a href="/">← 首页</a></div>
+  <h1>协同看板</h1>
   <button class="btn" onclick="newBoard()">＋ 新建看板</button>
   <select class="btn" id="docSel" onchange="connect(this.value)"></select>
   <button class="btn primary" id="addColBtn" onclick="btnColumn()" disabled>＋ 添加列</button>
-  <span class="tag" id="meTag"></span>
+  <span class="tag" id="meTag" style="margin-left:auto"></span>
 </header>
 <div id="board">
   <div id="hint" style="display:none"><b>先「＋ 添加列」创建第一列</b>拖动卡片换列/排序 · 双击文字编辑 · ✕ 删卡</div>

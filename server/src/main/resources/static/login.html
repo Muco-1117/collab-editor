@@ -2,31 +2,55 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>登录 · 协同工作台</title>
 <script src="/auth.js"></script>
 <style>
-  :root { --bg:#f7f8fa; --card:#fff; --line:#e3e6eb; --ink:#1f2329; --mut:#8a919f; --acc:#3b82f6; }
+  :root {
+    --bg:#f7f6f3; --card:#ffffff; --line:rgba(20,18,14,.09); --ink:rgba(30,27,24,.92);
+    --mut:#6f6960; --mutl:#a39e96; --acc:#0a6cda; --acc2:#005bb5;
+    --deep: rgba(30,27,20,.02) 0px 1px 3px, rgba(30,27,20,.03) 0px 3px 7px,
+            rgba(30,27,20,.05) 0px 7px 15px, rgba(30,27,20,.08) 0px 14px 28px;
+  }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: "Microsoft YaHei", system-ui, sans-serif; background: var(--bg); color: var(--ink); min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-  .box { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 34px 30px; width: 340px; box-shadow: 0 6px 24px rgba(0,0,0,.06); }
-  h1 { font-size: 20px; text-align: center; margin-bottom: 4px; }
-  .sub { text-align: center; color: var(--mut); font-size: 13px; margin-bottom: 22px; }
-  label { display: block; font-size: 13px; color: var(--mut); margin: 12px 0 4px; }
-  input { width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; outline: none; }
-  input:focus { border-color: var(--acc); }
-  .btn { display: block; width: 100%; margin-top: 18px; padding: 10px; border: 0; border-radius: 8px; background: var(--acc); color: #fff; font-size: 15px; cursor: pointer; }
-  .btn:hover { opacity: .9; }
-  .tip { text-align: center; margin-top: 14px; font-size: 13px; color: var(--mut); }
-  .tip a { color: var(--acc); cursor: pointer; text-decoration: none; }
-  .err { color: #d93026; font-size: 13px; margin-top: 10px; min-height: 18px; text-align: center; }
-  .back { margin-top: 16px; text-align: center; font-size: 12px; color: var(--mut); }
-  .back a { color: var(--mut); }
+  body { font-family: system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+         background: var(--bg); color: var(--ink); min-height: 100vh; display: flex;
+         flex-direction: column; align-items: center; justify-content: center;
+         -webkit-font-smoothing: antialiased; }
+  .brand { position:absolute; top:22px; left:26px; display:flex; align-items:center; gap:9px;
+           font-size:15px; font-weight:700; letter-spacing:-.2px; }
+  .brand .logo { width:30px; height:30px; border-radius:8px; background:var(--acc); color:#fff;
+      display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:700; }
+  .brand a { color:var(--mut); font-weight:400; font-size:13px; text-decoration:none; margin-left:6px; }
+  .brand a:hover { color:var(--acc); }
+  .box { background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+         padding: 38px 34px 30px; width: 356px; box-shadow: var(--deep); }
+  .box .logo-l { width:44px; height:44px; border-radius:12px; background:var(--acc); color:#fff;
+      display:flex; align-items:center; justify-content:center; font-size:21px; font-weight:700;
+      margin: 0 auto 16px; }
+  h1 { font-size: 21px; text-align: center; margin-bottom: 6px; letter-spacing:-.4px; }
+  .sub { text-align: center; color: var(--mut); font-size: 13.5px; margin-bottom: 24px; }
+  label { display: block; font-size: 13px; color: var(--mut); margin: 14px 0 5px; font-weight:500; }
+  input { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px;
+          font-size: 14px; outline: none; background:#fff; transition: border-color .15s, box-shadow .15s; }
+  input:focus { border-color: var(--acc); box-shadow: 0 0 0 3px rgba(10,108,218,.14); }
+  .btn { display: block; width: 100%; margin-top: 22px; padding: 11px; border: 0; border-radius: 8px;
+         background: var(--acc); color: #fff; font-size: 15px; font-weight:600; cursor: pointer;
+         transition: background .15s, transform .1s; }
+  .btn:hover { background: #095db8; }
+  .btn:active { transform: scale(.98); }
+  .tip { text-align: center; margin-top: 16px; font-size: 13px; color: var(--mut); }
+  .tip a { color: var(--acc); cursor: pointer; text-decoration: none; font-weight:600; }
+  .tip a:hover { text-decoration: underline; }
+  .err { color: #d93026; font-size: 13px; margin-top: 12px; min-height: 18px; text-align: center; }
 </style>
 </head>
 <body>
+  <div class="brand"><span class="logo">协</span>协同工作台<a href="/">← 返回首页</a></div>
   <div class="box card">
+    <div class="logo-l">协</div>
     <h1>协同工作台</h1>
-    <div class="sub">登录后进入 文档 / 白板 / 看板</div>
+    <div class="sub">登录后进入 文档 / 白板 / 看板，与成员实时协作</div>
     <form id="form">
       <label>用户名</label>
       <input id="username" autocomplete="username" required>
@@ -38,7 +62,6 @@
     </form>
     <div class="err" id="err"></div>
     <div class="tip"><span id="switchText">没有账号？</span><a id="switch" href="javascript:void(0)">注册一个</a></div>
-    <div class="back"><a href="/">← 返回首页</a></div>
   </div>
 <script>
   const isReg = { v: false };
@@ -69,9 +92,6 @@
       location.href = '/';
     } catch { $('err').textContent = '网络错误，请确认服务已启动'; }
   };
-
-  // 已登录直接回首页
-  if (window.auth.token()) location.href = '/';
 </script>
 </body>
 </html>

@@ -5,49 +5,65 @@
 <title>协同工作台 · 白板</title>
 <script src="/auth.js"></script>
 <style>
-  :root { --bg:#f7f8fa; --card:#fff; --line:#e3e6eb; --ink:#1f2329; --mut:#8a919f; --acc:#3b82f6; }
+  :root {
+    --bg:#f7f6f3; --card:#ffffff; --line:rgba(20,18,14,.09);
+    --ink:rgba(30,27,24,.92); --mut:#6f6960; --mutl:#a39e96;
+    --acc:#0a6cda; --acc2:#0059b5; --accbg:#f2f8ff; --ok:#1e9e58;
+    --shadow: rgba(30,27,20,.05) 0px 4px 18px, rgba(30,27,20,.035) 0px 2px 7.8px,
+              rgba(30,27,20,.025) 0px .8px 2.9px, rgba(30,27,20,.02) 0px .2px 1px;
+  }
   * { box-sizing: border-box; }
   body { margin:0; font:14px/1.6 system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
-         background:var(--bg); color:var(--ink); overflow:hidden; }
-  header { display:flex; align-items:center; gap:12px; padding:10px 20px; background:var(--card);
+         background:var(--bg); color:var(--ink); overflow:hidden; -webkit-font-smoothing:antialiased; }
+  header { position:sticky; top:0; z-index:40; display:flex; align-items:center; gap:10px;
+           padding:9px 20px; background:rgba(255,255,255,.88); backdrop-filter:blur(10px);
            border-bottom:1px solid var(--line); }
-  header h1 { font-size:16px; margin:0; font-weight:600; }
-  .tag { font-size:12px; color:var(--mut); }
-  .btn { border:1px solid var(--line); background:#fff; border-radius:6px; padding:5px 12px;
-         cursor:pointer; font-size:13px; }
-  .btn.primary { background:var(--acc); border-color:var(--acc); color:#fff; }
+  header .brand { display:flex; align-items:center; gap:8px; margin-right:6px; }
+  header .brand .logo { width:26px; height:26px; border-radius:7px; background:var(--acc); color:#fff;
+      display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; }
+  header .brand a { color:var(--mut); text-decoration:none; font-size:12.5px; margin-left:2px; }
+  header .brand a:hover { color:var(--acc); }
+  header h1 { font-size:15px; margin:0; font-weight:700; letter-spacing:-.2px; }
+  .tag { font-size:12.5px; color:var(--mut); }
+  .btn { border:1px solid var(--line); background:#fff; border-radius:7px; padding:5px 12px;
+         cursor:pointer; font-size:13px; transition:all .15s; color:var(--ink); }
+  .btn:hover { border-color:var(--acc); color:var(--acc); }
+  .btn.primary { background:var(--acc); border-color:var(--acc); color:#fff; font-weight:600; }
+  .btn.primary:hover { background:var(--acc2); color:#fff; }
   #board { position:relative; height:calc(100vh - 52px); overflow:hidden;
-           background:radial-gradient(circle, #eceff3 1px, transparent 1px) 0 0/24px 24px; }
+           background:radial-gradient(circle, rgba(30,27,20,.13) 1px, transparent 1px) 0 0/22px 22px; }
   .card { position:absolute; min-width:90px; min-height:56px; background:var(--card);
-          border:1px solid var(--line); border-radius:10px; box-shadow:0 1px 4px rgba(20,30,60,.08);
+          border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow);
           padding:26px 10px 10px; cursor:grab; user-select:none; }
-  .card.drag { cursor:grabbing; box-shadow:0 10px 24px rgba(20,30,60,.22); z-index:10; }
+  .card.drag { cursor:grabbing; box-shadow:var(--deep, 0 10px 24px rgba(20,30,60,.22)); z-index:10; }
   .card .body { outline:none; white-space:pre-wrap; word-break:break-all; min-height:1em; font-size:14px; }
-  .card .body:empty::before { content:'（双击输入文字）'; color:#c3c8d1; }
+  .card .body:empty::before { content:'（双击输入文字）'; color:var(--mutl); }
   .card .del { position:absolute; top:5px; right:7px; border:0; background:none; color:#b9c0cd;
                font-size:14px; cursor:pointer; padding:0 3px; line-height:1; }
   .card:hover .del, .card .del:hover { color:#e5484d; }
   .card .resize { position:absolute; right:2px; bottom:2px; width:14px; height:14px; cursor:nwse-resize;
                   background:linear-gradient(135deg, transparent 45%, #b7bfcb 45%, #b7bfcb 60%, transparent 60%); }
   .card .owner { position:absolute; left:7px; top:4px; font-size:10px; color:#b7bfcb; }
-  #status { position:fixed; right:14px; bottom:12px; font-size:12px; color:var(--mut);
-            background:rgba(255,255,255,.9); border:1px solid var(--line); border-radius:8px; padding:4px 10px; }
-  #log { position:fixed; left:14px; bottom:12px; font-size:11px; color:#9aa3b2; max-width:420px;
-         max-height:64px; overflow:auto; background:rgba(255,255,255,.92); border:1px solid var(--line);
-         border-radius:8px; padding:4px 10px; display:none; }
+  #status { position:fixed; right:16px; bottom:12px; font-size:12px; color:var(--mut);
+           background:rgba(255,255,255,.93); border:1px solid var(--line); border-radius:999px;
+           padding:5px 12px; box-shadow:var(--shadow); }
+  #log { position:fixed; left:16px; bottom:12px; font-size:11px; color:#98938b; max-width:420px;
+         max-height:64px; overflow:auto; background:rgba(255,255,255,.93); border:1px solid var(--line);
+         border-radius:9px; padding:4px 10px; display:none; }
   #hint { position:absolute; left:50%; top:46%; transform:translate(-50%,-50%); text-align:center;
-          color:#aab1bd; pointer-events:none; display:none; }
-  #hint b { display:block; font-size:15px; margin-bottom:6px; color:#8a919f; }
+          color:#a39e96; pointer-events:none; display:none; }
+  #hint b { display:block; font-size:15px; margin-bottom:6px; color:#8a837a; }
   .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; }
-  .dot.on { background:#23c55e; } .dot.off { background:#e5484d; }
+  .dot.on { background:var(--ok); } .dot.off { background:#e5484d; }
 </style>
 </head>
 <body>
 <header>
-  <h1>协同白板 <span class="tag">卡片实时同步</span></h1>
+  <div class="brand"><span class="logo">协</span><a href="/">← 首页</a></div>
+  <h1>协同白板</h1>
   <button class="btn primary" onclick="newBoard()">＋ 新建白板</button>
   <select class="btn" id="boardSel" onchange="connect(this.value)"></select>
-  <span class="tag" id="meTag"></span>
+  <span class="tag" id="meTag" style="margin-left:auto"></span>
 </header>
 <div id="board">
   <div id="hint"><b>双击空白处新建卡片</b>拖动卡片 · 右下角缩放 · 右上角 ✕ 删除 · 双击文字区域编辑</div>

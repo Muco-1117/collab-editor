@@ -3,93 +3,195 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>协同工作台 · 入口</title>
+<title>协同工作台 · 多人实时协同编辑系统</title>
 <script src="/auth.js"></script>
 <style>
-  :root { --bg:#f7f8fa; --card:#fff; --line:#e3e6eb; --ink:#1f2329; --mut:#8a919f; --acc:#3b82f6; }
+  /* —— Notion 系设计语言：暖中性色 · whisper 细边框 · 单一蓝色强调 —— */
+  :root {
+    --bg:#f7f6f3;            /* 暖白底 */
+    --card:#ffffff;
+    --line:rgba(20,18,14,.09);   /* whisper border */
+    --ink:rgba(30,27,24,.92);    /* 暖黑 */
+    --mut:#6f6960;            /* 暖灰 500 */
+    --mutl:#a39e96;           /* 暖灰 300 */
+    --acc:#0a6cda;            /* Notion Blue */
+    --acc2:#005bb5;           /* 按下态 */
+    --accbg:#f2f8ff;          /* 蓝色浅底 */
+    --ok:#1aae62;
+    --shadow: rgba(30,27,20,.05) 0px 4px 18px, rgba(30,27,20,.035) 0px 2px 7.8px,
+              rgba(30,27,20,.025) 0px .8px 2.9px, rgba(30,27,20,.02) 0px .2px 1px;
+    --deep: rgba(30,27,20,.02) 0px 1px 3px, rgba(30,27,20,.03) 0px 3px 7px,
+            rgba(30,27,20,.04) 0px 7px 15px, rgba(30,27,20,.06) 0px 14px 28px,
+            rgba(30,27,20,.07) 0px 23px 52px;
+  }
   * { box-sizing:border-box; }
-  body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
-         background:radial-gradient(circle at 30% 20%, #eef3ff, transparent 50%),
-                    radial-gradient(circle at 80% 80%, #edf7f0, transparent 50%), var(--bg);
-         font:15px/1.7 system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
-         color:var(--ink); }
-  .button { padding:2px 12px; border:1px solid var(--line); border-radius:99px; background:var(--card);
-            font-size:12px; cursor:pointer; text-decoration:none; color:var(--ink); }
+  body { margin:0; min-height:100vh; background:var(--bg); color:var(--ink);
+         font:15px/1.65 system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+         -webkit-font-smoothing:antialiased; }
+
+  /* —— 顶栏 —— */
+  header.nav { position:sticky; top:0; z-index:50; background:rgba(255,255,255,.86);
+      backdrop-filter:blur(10px); border-bottom:1px solid var(--line);
+      display:flex; align-items:center; justify-content:space-between; padding:10px 28px; }
+  .brand { display:flex; align-items:center; gap:10px; font-size:16px; font-weight:700; letter-spacing:-.2px; }
+  .brand .logo { width:30px; height:30px; border-radius:8px; background:var(--acc); color:#fff;
+      display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:700; }
+  .userbar { display:flex; align-items:center; gap:8px; font-size:13.5px; }
+  .userbar b { font-weight:600; }
+  .avatar { width:26px; height:26px; border-radius:50%; background:var(--acc); color:#fff;
+      display:inline-flex; align-items:center; justify-content:center; font-size:12px; font-weight:600; }
+
+  .button { padding:5px 14px; border:1px solid var(--line); border-radius:6px; background:var(--card);
+      font-size:13px; font-weight:500; cursor:pointer; text-decoration:none; color:var(--ink);
+      transition:all .15s; white-space:nowrap; }
   .button:hover { border-color:var(--acc); color:var(--acc); }
-  .userbar { text-align:right; margin-bottom:14px; font-size:13px; color:var(--mut); }
-  .userbar b { color:var(--ink); }
-  .wrap { max-width:860px; width:92%; padding:40px 0; }
-  h1 { font-size:26px; font-weight:700; margin:0 0 6px; }
-  .sub { color:var(--mut); margin-bottom:30px; }
-  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:16px; }
-  .app { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:22px;
-         text-decoration:none; color:inherit; display:block; transition:all .18s; }
-  .app:hover { transform:translateY(-3px); box-shadow:0 12px 28px rgba(20,30,60,.10); border-color:#c9d6ef; }
-  .app .em { font-size:30px; }
-  .app h2 { margin:10px 0 6px; font-size:17px; }
-  .app p { margin:0; color:var(--mut); font-size:13px; }
-  .so { margin-top:14px; font-size:11px; color:#aab1bd; }
-  .stage { display:inline-block; padding:2px 8px; border-radius:99px; background:#e8f0fe; color:var(--acc);
-           font-size:11px; margin-left:6px; vertical-align:2px; }
-  .stage.done { background:#e6f7ec; color:#1a9e4b; }
-  .stage.coming { background:#f4f5f7; color:#aab1bd; }
+  .button.primary { background:var(--acc); border-color:var(--acc); color:#fff; font-weight:600; }
+  .button.primary:hover { background:var(--acc2); color:#fff; }
+  .button:active { transform:scale(.97); }
+
+  main { max-width:1040px; margin:0 auto; padding:36px 24px 60px; }
+
+  /* —— Hero —— */
+  .hero h1 { font-size:30px; font-weight:700; letter-spacing:-.6px; margin:0 0 8px; }
+  .hero .sub { color:var(--mut); margin:0 0 22px; font-size:14.5px; }
+  .pill { display:inline-block; padding:2.5px 10px; border-radius:999px; font-size:12px; font-weight:600;
+      letter-spacing:.2px; vertical-align:4px; }
+  .pill.done { background:#e9f8ee; color:var(--ok,#1e9e58); }
+  .pill.blue { background:var(--accbg,#f2f8ff); color:var(--acc); }
+
+  .searchrow { display:flex; gap:8px; align-items:center; }
+  .searchbox { position:relative; flex:1; max-width:560px; }
+  .searchbox svg { position:absolute; left:12px; top:50%; transform:translateY(-50%); opacity:.45; }
+  .searchbox input { width:100%; padding:10px 14px 10px 36px; border:1px solid var(--line); border-radius:8px;
+      background:var(--card); font-size:14px; outline:none; transition:box-shadow .15s, border-color .15s; }
+  .searchbox input:focus { border-color:var(--acc); box-shadow:0 0 0 3px rgba(10,108,218,.13); }
+
+  /* —— 统计 metric 条 —— */
+  .metrics { display:flex; gap:12px; margin:10px 0 26px; flex-wrap:wrap; }
+  .metrics .m { background:var(--card); border:1px solid var(--line); border-radius:12px;
+      padding:14px 18px; min-width:118px; }
+  .metrics .m b { font-size:22px; font-weight:700; letter-spacing:-.4px; display:block; line-height:1.2; }
+  .metrics .m span { font-size:12px; color:var(--mut); }
+  #statsLine { color:var(--mutl); font-size:12px; margin:0 0 6px; }
+
+  /* —— 空间面板 —— */
+  #spPanel { background:var(--card); border:1px solid var(--line); border-radius:12px;
+      padding:18px 20px; margin-bottom:24px; box-shadow:var(--shadow); }
+  #spPanel .sphead { display:flex; align-items:center; gap:10px; margin-bottom:14px; }
+  #spPanel .sphead b { font-size:15px; letter-spacing:-.2px; }
+  #spPanel input[type=text], #spPanel input:not([type]) { padding:7px 12px; border:1px solid var(--line);
+      border-radius:6px; font-size:13px; outline:none; background:var(--card); }
+  #spPanel input:focus { border-color:var(--acc); box-shadow:0 0 0 3px rgba(10,108,218,.14); }
+
+  /* —— 应用卡 —— */
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(255px,1fr)); gap:18px; }
+  .app { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:24px 22px;
+      text-decoration:none; color:inherit; display:block; transition:all .18s; box-shadow:var(--shadow); }
+  .app:hover { transform:translateY(-3px); box-shadow:var(--deep); border-color:rgba(10,108,218,.35); }
+  .app .ic { width:42px; height:42px; border-radius:10px; display:flex; align-items:center; justify-content:center;
+      margin-bottom:14px; }
+  .app.ic-doc .ic { background:#eef4ff; color:#2d6de0; }
+  .app.ic-board .ic { background:#fdf1e2; color:#d9772b; }
+  .app.ic-kanban .ic { background:#eafaf2; color:#1d9e66; }
+  .app h2 { margin:0 0 6px; font-size:17px; font-weight:700; letter-spacing:-.2px; }
+  .app p { margin:0 0 14px; color:var(--mut); font-size:13.5px; }
+  .app .tags { display:flex; flex-wrap:wrap; gap:6px; }
+  .app .tags span { padding:2px 9px; border-radius:999px; background:var(--bg); border:1px solid var(--line);
+      font-size:11.5px; color:var(--mut); }
+
+  .so { color:var(--mutl); font-size:12px; }
+  .tip { margin-top:28px; background:var(--card); border:1px dashed rgba(10,108,218,.35); border-radius:10px;
+      padding:13px 16px; font-size:13px; color:var(--mut); }
+  .tip a { color:var(--acc); text-decoration:none; }
 </style>
 </head>
 <body>
-<div class="wrap">
+<header class="nav">
+  <div class="brand"><span class="logo">协</span>协同工作台</div>
   <div class="userbar" id="userbar">…</div>
-  <div style="display:flex; gap:10px; margin-bottom:16px; align-items:center;">
-    <input id="searchQ" placeholder="搜索文档标题 / 正文（Enter 回车）" style="flex:1; max-width:420px; padding:8px 12px; border:1px solid var(--line); border-radius:99px; font-size:14px; outline:none;">
-    <span class="so" id="statsLine" style="margin:0">—</span>
-  </div>
-  <div id="searchRes" style="margin-bottom:16px;"></div>
-  <h1>协同工作台 <span class="stage done">运行中</span></h1>
-  <p class="sub">基于自研协同引擎（Lamport 时钟 + LWW 合并）的多人实时协作应用</p>
+</header>
 
-  <div id="spPanel" style="background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px 20px; margin-bottom:20px;">
-    <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
-      <b style="font-size:15px">🗂 我的空间</b>
-      <input id="spName" placeholder="空间名称" style="flex:1; max-width:220px; padding:6px 10px; border:1px solid var(--line); border-radius:8px; font-size:13px;">
-      <button class="button" id="spCreate">＋ 创建空间</button>
-      <span class="so" style="margin:0">空间彼此隔离；创建空间后即可邀请成员</span>
+<main>
+  <section class="hero">
+    <h1>多人实时协同编辑系统 <span class="pill done">运行中</span></h1>
+    <p class="sub">基于 SpringBoot + WebSocket 与自研协作引擎（Lamport 时钟 · LWW 字段级合并）——文档、白板、看板三合一</p>
+    <div class="searchrow">
+      <div class="searchbox">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="searchQ" placeholder="搜索文档标题 / 正文（Enter 回车）">
+      </div>
+    </div>
+    <div id="searchRes" style="margin-top:10px;"></div>
+  </section>
+
+  <div class="metrics">
+    <div class="m"><b id="stMySpaces">—</b><span>我的空间</span></div>
+    <div class="m"><b id="stMyDocs">—</b><span>我的文档</span></div>
+    <div class="m"><b id="stUsers">—</b><span>平台用户</span></div>
+    <div class="m"><b id="stDocs">—</b><span>平台文档</span></div>
+    <div class="m"><b id="stOps">—</b><span>累计操作</span></div>
+    <div id="statsLine" class="so" style="display:flex; align-items:flex-end; padding-bottom:14px; margin-left:6px;">—</div>
+  </div>
+
+  <div id="spPanel">
+    <div class="sphead">
+      <b>🗂 我的空间</b>
+      <input id="spName" placeholder="空间名称">
+      <button class="button primary" id="spCreate">＋ 创建空间</button>
+      <span class="so" style="margin-left:auto">空间彼此隔离；创建空间后即可邀请成员</span>
     </div>
     <div id="spList" style="display:flex; flex-wrap:wrap; gap:10px;"></div>
   </div>
 
   <div class="grid">
-    <a class="app" href="/editor.html">
-      <div class="em">📝</div>
+    <a class="app ic ic-doc" href="/editor.html">
+      <div class="ic">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg>
+      </div>
       <h2>协同文档</h2>
-      <p>段落级实时编辑：输入、回车分段、删段、标题同步</p>
-      <div class="so">版本历史 · 一键回退 · Markdown 导出</div>
+      <p>段落级实时编辑：输入、回车分段、删段，标题与正文双向同步</p>
+      <div class="tags"><span>版本历史</span><span>一键回退</span><span>Markdown 导出</span></div>
     </a>
-    <a class="app" href="/board.html">
-      <div class="em">🧱</div>
+    <a class="app ic ic-board" href="/board.html">
+      <div class="ic">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/></svg>
+      </div>
       <h2>协同白板</h2>
-      <p>卡片拖拽 / 缩放 / 文字，几何字段走引擎合并</p>
-      <div class="so">坐标实时同步</div>
+      <p>自由画布 + 卡片，拖拽定位、缩放、文字标注，几何字段走引擎合并</p>
+      <div class="tags"><span>坐标实时同步</span><span>无限画布</span></div>
     </a>
-    <a class="app" href="/kanban.html">
-      <div class="em">🗂</div>
+    <a class="app ic ic-kanban" href="/kanban.html">
+      <div class="ic">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="5.2" height="18" rx="1.6"/><rect x="9.4" y="3" width="5.2" height="11" rx="1.6"/><rect x="15.8" y="3" width="5.2" height="15" rx="1.6"/></svg>
+      </div>
       <h2>协同看板</h2>
-      <p>列表列 + 卡片，拖拽换列排序，column 字段走引擎合并</p>
-      <div class="so">跨列拖拽实时同步</div>
+      <p>列表 + 卡片，拖拽换列 / 排序，字段级合并 + 重叠自愈</p>
+      <div class="tags"><span>跨列拖拽</span><span>并发防重叠</span></div>
     </a>
   </div>
-  <div class="so" style="margin-top:26px">
-    💡 体验方式：先<a href="/login.html" style="color:var(--acc)">登录</a>，然后开两个标签页进入同一应用，一边输入/拖拽，另一边实时同步；
-    刷新或拔网重连后增量补回；重启后端服务数据也不丢（MySQL 持久化）。
+
+  <div class="tip">
+    💡 体验方式：先<a href="/login.html">登录</a>，开两个标签页进入同一应用：一边输入 / 拖拽，另一边实时同步；
+    刷新或断线重连后增量补回；重启服务数据不丢（MySQL 持久化）。
   </div>
-</div>
+</main>
+
 <script>
   const spHeaders = token => ({ 'Content-Type': 'application/json', Authorization: 'Bearer ' + token });
+  /* 顶栏昵称首字头像 */
+  function avatar(initial) {
+    const d = document.createElement('span');
+    d.className = 'avatar';
+    d.textContent = (initial || '?').slice(0, 1).toUpperCase();
+    return d;
+  }
   async function openProfile() {
     const mask = document.createElement('div');
-    mask.style.cssText = 'position:fixed; inset:0; background:rgba(15,20,35,.55); z-index:999; display:flex; align-items:center; justify-content:center;';
+    mask.style.cssText = 'position:fixed; inset:0; background:rgba(26,24,20,.45); z-index:999; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(2px);';
     mask.onclick = ev => { if (ev.target === mask) mask.remove(); };
     const box = document.createElement('div');
-    box.style.cssText = 'width:420px; max-width:92vw; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:22px 26px; color:var(--ink); box-shadow:0 18px 50px rgba(0,0,0,.35);';
-    box.innerHTML = '<div style="font-size:16px; font-weight:700; margin-bottom:16px">我的资料</div><div id="pfBody" style="font-size:13px; color:var(--mut)">加载中…</div>';
+    box.style.cssText = 'width:420px; max-width:92vw; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:24px 28px; color:var(--ink); box-shadow:var(--deep);';
+    box.innerHTML = '<div style="font-size:16px; font-weight:700; margin-bottom:18px">我的资料</div><div id="pfBody" style="font-size:13px; color:var(--mut)">加载中…</div>';
     mask.appendChild(box); document.body.appendChild(mask);
     const body = box.querySelector('#pfBody');
     const r = await fetch('/api/auth/profile', { headers: spHeaders(window.auth.token()) });
@@ -98,23 +200,23 @@
     const init = (p.nickname || p.username || '?').slice(0, 1).toUpperCase();
     const esc = s => String(s == null ? '' : s).replace(/</g, '&lt;');
     const created = p.created_at ? String(p.created_at).slice(0, 10) : '—';
-    const stat = (label, v) => '<div style="background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px;text-align:center">'
-      + '<div style="font-size:18px;font-weight:700;color:var(--ink)">' + v + '</div>'
-      + '<div style="font-size:11px;color:var(--mut);margin-top:2px">' + label + '</div></div>';
+    const stat = (label, v) => '<div style="background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px;text-align:center">'
+      + '<div style="font-size:19px;font-weight:700;color:var(--ink)">' + v + '</div>'
+      + '<div style="font-size:11px;color:var(--mut);margin-top:3px">' + label + '</div></div>';
     body.innerHTML = ''
-      + '<div style="display:flex;gap:14px;align-items:center;margin-bottom:18px">'
-      + '<div style="width:52px;height:52px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700">' + esc(init) + '</div>'
+      + '<div style="display:flex;gap:14px;align-items:center;margin-bottom:20px">'
+      + '<div style="width:52px;height:52px;border-radius:50%;background:var(--acc);color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700">' + esc(init) + '</div>'
       + '<div><div style="font-size:15px;font-weight:600;color:var(--ink)">' + esc(p.nickname || p.username)
       + ' <span style="color:var(--mut);font-weight:400;font-size:12px">@' + esc(p.username) + '</span></div>'
       + '<div style="font-size:12px;color:var(--mut);margin-top:3px">角色：' + esc(p.role || '—') + ' · 注册于 ' + esc(created) + '</div></div></div>'
-      + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">'
+      + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px">'
       + stat('我的空间', p.spaces) + stat('我的文档', p.docs) + stat('累计操作', p.ops) + '</div>'
       + '<div style="font-size:12px;color:var(--mut);margin-bottom:6px">昵称（其他人看到的名字）</div>'
       + '<div style="display:flex;gap:8px"><input id="pfNick" maxlength="16" '
-      + 'style="flex:1;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)" '
+      + 'style="flex:1;padding:8px 12px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);outline:none" '
       + 'value="' + esc(p.nickname || p.username) + '">'
-      + '<button class="button" id="pfSave">保存</button></div>'
-      + '<div id="pfMsg" style="font-size:12px;margin-top:6px;min-height:16px"></div>';
+      + '<button class="button primary" id="pfSave">保存</button></div>'
+      + '<div id="pfMsg" style="font-size:12px;margin-top:8px;min-height:16px"></div>';
     document.getElementById('pfSave').onclick = async () => {
       const nick = document.getElementById('pfNick').value.trim();
       const rr = await fetch('/api/auth/profile', {
@@ -125,8 +227,11 @@
       const msg = document.getElementById('pfMsg');
       if (!rr.ok) { msg.style.color = '#e05b4f'; msg.textContent = jj.msg || '保存失败'; return; }
       msg.style.color = '#2e9e5b'; msg.textContent = '已保存';
-      const barB = document.querySelector('#userbar b');
-      if (barB) barB.textContent = nick || jj.profile.username;
+      const barB = document.querySelector('#userbar .uname');
+      if (barB) {
+        const role = (barB.textContent.match(/editor|admin|viewer/) || [''])[0];
+        barB.innerHTML = '<b>' + esc(nick || jj.profile.username) + '</b> <span class="so">' + role + '</span>';
+      }
     };
   }
 
@@ -141,7 +246,7 @@ async function loadSpaces() {
       if (!spaces.length) { box.innerHTML = '<span class="so">还没有空间——创建第一个吧</span>'; return; }
       spaces.forEach(s => {
         const card = document.createElement('div');
-        card.style.cssText = 'border:1px solid var(--line); border-radius:10px; padding:10px 14px; min-width:210px;';
+        card.style.cssText = 'border:1px solid var(--line); border-radius:10px; padding:11px 14px; min-width:215px; background:var(--bg);';
         card.innerHTML = '<div><b>' + s.name + '</b> <span class="so">' + (s.my_role || '') + '</span></div>'
           + '<div class="so" style="margin:4px 0 8px">' + s.doc_count + ' 文档 · ' + s.member_count + ' 成员</div>'
           + '<a class="button" href="/editor.html" style="margin-right:6px">文档</a>'
@@ -184,21 +289,33 @@ async function loadSpaces() {
     const u = await window.auth.me();
     const bar = document.getElementById('userbar');
     if (u) {
-      bar.innerHTML = '👤 <b>' + (u.nickname || u.username) + '</b> · ' + (u.role || 'editor')
-        + ' <a class="button" id="meBtn" href="javascript:void(0)" style="margin-left:8px">我的资料</a>'
-        + ' <a class="button" id="logout" href="javascript:void(0)" style="margin-left:4px">退出登录</a>';
-      document.getElementById('logout').onclick = () => { auth.clear(); location.reload(); };
-      document.getElementById('meBtn').onclick = openProfile;
+      bar.innerHTML = '';
+      const nick = u.nickname || u.username;
+      bar.appendChild(avatar(nick));
+      const nameEl = document.createElement('span');
+      nameEl.className = 'uname';
+      nameEl.innerHTML = '<b>' + nick + '</b> <span class="so">' + (u.role || 'editor') + '</span>';
+      bar.appendChild(nameEl);
+      const me = document.createElement('a');
+      me.className = 'button'; me.id = 'meBtn'; me.href = 'javascript:void(0)';
+      me.textContent = '我的资料'; me.style.marginLeft = '6px';
+      me.onclick = openProfile;
+      bar.appendChild(me);
+      const out = document.createElement('a');
+      out.className = 'button'; out.id = 'logout'; out.href = 'javascript:void(0)';
+      out.textContent = '退出'; out.style.marginLeft = '4px';
+      out.onclick = () => { auth.clear(); location.reload(); };
+      bar.appendChild(out);
       loadSpaces();
       loadStats();
       bindSearch();
     } else {
-      bar.innerHTML = '<a class="button" href="/login.html">登录 / 注册</a>';
+      bar.innerHTML = '<a class="button primary" href="/login.html">登录 / 注册</a>';
       // 未登录：我的空间面板替换为引导登录提示（避免点到 401）
       document.getElementById('spPanel').innerHTML =
-        '<div style="text-align:center; padding:26px 0;">'
-        + '<div style="font-size:15px; margin-bottom:10px;">登录后可创建 / 加入空间，与成员实时协同</div>'
-        + '<a class="button" href="/login.html" style="display:inline-block; padding:9px 30px;">去登录 / 注册</a></div>';
+        '<div style="text-align:center; padding:30px 0;">'
+        + '<div style="font-size:15px; margin-bottom:12px;">登录后可创建 / 加入空间，与成员实时协同</div>'
+        + '<a class="button primary" href="/login.html" style="display:inline-block; padding:9px 32px;">去登录 / 注册</a></div>';
       document.getElementById('searchQ').disabled = true;
       document.getElementById('searchQ').placeholder = '登录后可搜索文档';
     }
@@ -211,6 +328,18 @@ async function loadSpaces() {
         + ' · 平台: ' + (j.platform ? j.platform.users + ' 用户 / ' + j.platform.docs + ' 文档 / ' + j.platform.ops + ' 次操作' : '');
     } catch (e) { document.getElementById('statsLine').textContent = ''; }
   }
+  /* 平台 metric 条（未登录也可见，与 statsLine 数据同源） */
+  async function loadMetrics() {
+    try {
+      const r = await fetch('/api/stats', { headers: spHeaders(window.auth.token()) });
+      const j = await r.json();
+      const pf = j.platform || {};
+      const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = String(v); };
+      set('stMySpaces', j.mySpaces); set('stMyDocs', j.myDocs);
+      set('stUsers', pf.users ?? '—'); set('stDocs', pf.docs ?? '—'); set('stOps', pf.ops ?? '—');
+    } catch (e) { /* 后端未就绪时保持 — */ }
+  }
+  loadMetrics();
   function bindSearch() {
     const q = document.getElementById('searchQ');
     q.addEventListener('keydown', async ev => {
@@ -222,7 +351,7 @@ async function loadSpaces() {
       if (!list.length) { box.innerHTML = '<span class="so">无匹配结果</span>'; return; }
       list.forEach(d => {
         const row = document.createElement('div');
-        row.style.cssText = 'padding:8px 12px; background:var(--card); border:1px solid var(--line); border-radius:10px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;';
+        row.style.cssText = 'padding:9px 14px; background:var(--card); border:1px solid var(--line); border-radius:10px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;';
         row.innerHTML = '<span>📄 ' + d.title + ' <span class="so">(' + (d.space_name || '') + ') [' + d.hit + ']</span></span>'
           + '<button class="button">打开</button>';
         row.querySelector('button').onclick = () => {

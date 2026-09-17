@@ -5,55 +5,71 @@
 <title>协同工作台 · 文档</title>
 <script src="/auth.js"></script>
 <style>
-  :root { --bg:#f7f8fa; --card:#fff; --line:#e3e6eb; --ink:#1f2329; --mut:#8a919f; --acc:#3b82f6; }
+:root {
+    --bg:#f7f6f3; --card:#ffffff; --line:rgba(20,18,14,.09);
+    --ink:rgba(30,27,24,.92); --mut:#6f6960; --mutl:#a39e96;
+    --acc:#0a6cda; --acc2:#005bb5; --accbg:#f2f8ff; --ok:#1e9e58;
+    --shadow: rgba(30,27,20,.05) 0px 4px 18px, rgba(30,27,20,.035) 0px 2px 7.8px,
+              rgba(30,27,20,.025) 0px .8px 2.9px, rgba(30,27,20,.02) 0px .2px 1px;
+  }
   * { box-sizing: border-box; }
   body { margin:0; font:14px/1.7 system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
-         background:var(--bg); color:var(--ink); }
-  header { display:flex; align-items:center; gap:12px; padding:10px 20px; background:var(--card);
+         background:var(--bg); color:var(--ink); -webkit-font-smoothing:antialiased; }
+  header { position:sticky; top:0; z-index:40; display:flex; align-items:center; gap:10px;
+           padding:9px 20px; background:rgba(255,255,255,.88); backdrop-filter:blur(10px);
            border-bottom:1px solid var(--line); }
-  header h1 { font-size:16px; margin:0; font-weight:600; }
-  .tag { font-size:12px; color:var(--mut); }
-  .btn { border:1px solid var(--line); background:#fff; border-radius:6px; padding:5px 12px;
-         cursor:pointer; font-size:13px; }
-  .btn.primary { background:var(--acc); border-color:var(--acc); color:#fff; }
-  .btn:hover { opacity:.88; }
-  #wrap { display:flex; height:calc(100vh - 50px); }
-  #side { width:260px; border-right:1px solid var(--line); background:var(--card);
-          overflow:auto; padding:12px; }
-  #side h2 { font-size:13px; color:var(--mut); margin:0 0 8px; font-weight:500; }
-  .doc-item { padding:8px 10px; border-radius:6px; cursor:pointer; display:flex;
-              justify-content:space-between; align-items:center; gap:6px; }
-  .doc-item:hover { background:#f2f4f7; }
-  .doc-item.active { background:#e8f0fe; color:var(--acc); font-weight:600; }
-  .doc-item .del { visibility:hidden; border:0; background:none; color:var(--mut);
+  header .brand { display:flex; align-items:center; gap:8px; margin-right:6px; }
+  header .brand .logo { width:26px; height:26px; border-radius:7px; background:var(--acc); color:#fff;
+      display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; }
+  header .brand a { color:var(--mut); text-decoration:none; font-size:12.5px; margin-left:2px; }
+  header .brand a:hover { color:var(--acc); }
+  header h1 { font-size:15px; margin:0; font-weight:700; letter-spacing:-.2px; }
+  .tag { font-size:12.5px; color:var(--mut); }
+  .btn { border:1px solid var(--line); background:#fff; border-radius:7px; padding:5px 12px;
+         cursor:pointer; font-size:13px; transition:all .15s; color:var(--ink); }
+  .btn:hover { border-color:var(--acc); color:var(--acc); }
+  .btn.primary { background:var(--acc); border-color:var(--acc); color:#fff; font-weight:600; }
+  .btn.primary:hover { background:var(--acc2); color:#fff; }
+  #wrap { display:flex; height:calc(100vh - 49px); }
+  #side { width:264px; border-right:1px solid var(--line); background:var(--card);
+          overflow:auto; padding:14px; }
+  #side h2 { font-size:12px; color:var(--mutl); margin:0 0 8px; font-weight:600; letter-spacing:.4px; }
+  .doc-item { padding:7px 10px; border-radius:7px; cursor:pointer; display:flex;
+              justify-content:space-between; align-items:center; gap:6px; font-size:13.5px; }
+  .doc-item:hover { background:var(--bg); }
+  .doc-item.active { background:var(--accbg); color:var(--acc); font-weight:600; }
+  .doc-item .del { visibility:hidden; border:0; background:none; color:var(--mutl);
                    cursor:pointer; font-size:15px; padding:0 2px; }
   .doc-item:hover .del { visibility:visible; }
   .doc-item .del:hover { color:#e5484d; }
-  #main { flex:1; overflow:auto; padding:28px 18px; }
+  #main { flex:1; overflow:auto; padding:30px 18px; background:#f7f6f3; }
   #editor { max-width:760px; margin:0 auto; background:var(--card); border:1px solid var(--line);
-            border-radius:10px; padding:34px 46px; min-height:calc(100vh - 110px); }
-  #title { font-size:26px; font-weight:700; line-height:1.4; outline:none; margin-bottom:16px;
-           min-height:40px; }
-  #title:empty::before, .seg:empty::before { content:attr(data-ph); color:#c3c8d1; }
-  .seg { outline:none; font-size:16px; line-height:1.9; min-height:1.9em; padding:2px 0;
+            border-radius:12px; padding:38px 48px; min-height:calc(100vh - 110px);
+            box-shadow:var(--shadow); }
+  #title { font-size:28px; font-weight:700; letter-spacing:-.4px; line-height:1.4; outline:none; margin-bottom:18px;
+           min-height:42px; }
+  #title:empty::before, .seg:empty::before { content:attr(data-ph); color:var(--mutl); }
+  .seg { outline:none; font-size:16px; line-height:1.95; min-height:1.9em; padding:2px 2px;
          border-radius:3px; transition:box-shadow .15s; }
-  .seg:focus { box-shadow:0 1px 0 0 var(--acc); }
-  #status { position:fixed; right:14px; bottom:10px; font-size:12px; color:var(--mut);
-            background:rgba(255,255,255,.9); border:1px solid var(--line); border-radius:8px; padding:4px 10px; }
-  #log { position:fixed; left:14px; bottom:10px; font-size:11px; color:#9aa3b2; max-width:380px;
-         max-height:70px; overflow:auto; background:rgba(255,255,255,.92); border:1px solid var(--line);
-         border-radius:8px; padding:4px 10px; }
+  .seg:focus { box-shadow:0 1.5px 0 0 var(--acc); }
+  #status { position:fixed; right:16px; bottom:12px; font-size:12px; color:var(--mut);
+            background:rgba(255,255,255,.93); border:1px solid var(--line); border-radius:999px;
+            padding:5px 12px; box-shadow:var(--shadow); }
+  #log { position:fixed; left:16px; bottom:12px; font-size:11px; color:#98938b; max-width:380px;
+         max-height:70px; overflow:auto; background:rgba(255,255,255,.93); border:1px solid var(--line);
+         border-radius:9px; padding:4px 10px; }
   .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; }
-  .dot.on { background:#23c55e; } .dot.off { background:#e5484d; }
+  .dot.on { background:var(--ok); } .dot.off { background:#e5484d; }
 </style>
 </head>
 <body>
 <header>
-  <h1>协同文档 <span class="tag">实时协同编辑</span></h1>
+  <div class="brand"><span class="logo">协</span><a href="/">← 首页</a></div>
+  <h1>协同文档</h1>
   <button class="btn primary" onclick="newDoc()">＋ 新建文档</button>
   <button class="btn" onclick="showHistory()" title="版本历史：时间线回放与恢复">📜 历史</button>
   <button class="btn" onclick="exportMd()" title="导出为 Markdown">⬇ 导出</button>
-  <span class="tag" id="meTag"></span>
+  <span class="tag" id="meTag" style="margin-left:auto"></span>
 </header>
 <div id="wrap">
   <aside id="side">
