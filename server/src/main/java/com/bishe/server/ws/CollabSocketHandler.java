@@ -58,15 +58,23 @@ public class CollabSocketHandler extends TextWebSocketHandler {
                     ws.getAttributes().put("joined", Boolean.TRUE);
                 }
                 String clientId = req.clientId().isBlank() ? ws.getId() : req.clientId();
+                String role = "editor";
                 if (!canJoin(ws, req.docId())) {
                     ws.sendMessage(new TextMessage(CollabMessage.error("无权访问该文档空间")));
                     ws.close(CloseStatus.NOT_ACCEPTABLE);
                     return;
                 }
+                // 空间成员角色随会话绑定，op 帧按角色校验（viewer 只读）
+                long spId = docs.spaceIdOf(req.docId());
+                if (spId >= 0) {
+                    AuthService.UserPub u = (AuthService.UserPub) ws.getAttributes().get(TokenHandshakeInterceptor.ATTR_USER);
+                    String r = u != null ? spaces.roleOf(spId, u.id()) : null;
+                    if (r != null) role = r;
+                }
                 room = registry.roomFor(req.docId(), store);
                 ws.getAttributes().put("room", room);
 
-                CollabSession ses = new CollabSession(clientId, req.hostname(), ws);
+                CollabSession ses = new CollabSession(clientId, req.hostname(), ws, role);
                 ws.getAttributes().put("session", ses);
                 long rev0 = room.currentRev();
                 long lastRev = req.lastRev();
@@ -84,6 +92,11 @@ public class CollabSocketHandler extends TextWebSocketHandler {
             case "op" -> {
                 if (room == null) {
                     ws.sendMessage(new TextMessage(CollabMessage.error("未加入任何房间")));
+                    return;
+                }
+                CollabSession ses = (CollabSession) ws.getAttributes().get("session");
+                if (ses != null && !ses.canWrite()) {
+                    ws.sendMessage(new TextMessage(CollabMessage.error("只读成员（viewer）不可编辑")));
                     return;
                 }
                 try {
@@ -111,7 +124,10 @@ public class CollabSocketHandler extends TextWebSocketHandler {
         CollabSession ses = (CollabSession) ws.getAttributes().get("session");
         CollabRoom room = (CollabRoom) ws.getAttributes().get("room");
         if (ses != null && room != null) {
-            room.leave(ses.clientId());
+            room.leave(ses);
+            if (room.occupantCount() == 0) {
+                registry.scheduleEviction(room.docId());   // 无人房间延时回收
+            }
             log.info("leave client={} doc={}", ses.clientId(), room.docId());
         }
     }

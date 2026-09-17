@@ -432,12 +432,13 @@ function showHistory() {
     document.body.appendChild(box);
   }).catch(e => log('历史加载失败: ' + e));
 }
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function histItem(o) {
   const t = String((o.value_json || '').replace(/^"|"$/g, ''));
   return '<div style="padding:7px 8px; border-bottom:1px solid #f0f3f4;">'
-    + '<b>#' + o.seq + '</b> <span class="so">' + String(o.created_at || '').replace('T', ' ').slice(0, 16)
-    + '</span> · <span class="so">' + String(o.element_id || '').slice(0, 12) + '.' + (o.field || '∅')
-    + '</span> = ' + (t.slice(0, 42) || '∅')
+    + '<b>#' + o.seq + '</b> <span class="so">' + esc(String(o.created_at || '').replace('T', ' ').slice(0, 16))
+    + '</span> · <span class="so">' + esc(String(o.element_id || '').slice(0, 12)) + '.' + esc(o.field || '∅')
+    + '</span> = ' + esc(t.slice(0, 42) || '∅')
     + ' <button class="btn" style="padding:1px 9px;" onclick="restoreRev(' + o.seq + ')">恢复到此</button>'
     + '</div>';
 }

@@ -32,12 +32,12 @@ public class SecurityConfig {
                     res.sendError(HttpServletResponse.SC_UNAUTHORIZED, "未登录")))
             .authorizeHttpRequests(a -> a
                 .requestMatchers("/", "/index.html", "/login.html", "/editor.html",
-                        "/board.html", "/kanban.html", "/collab.html", "/favicon.ico").permitAll()
+                        "/board.html", "/kanban.html", "/auth.js", "/favicon.ico").permitAll()
                 .requestMatchers("/api/auth/register", "/api/auth/login").permitAll()
                 .requestMatchers("/api/health", "/actuator/health").permitAll()
                 .requestMatchers("/ws/**").permitAll()          // 握手守卫见 TokenHandshakeInterceptor
                 .requestMatchers("/api/**").authenticated()
-                .anyRequest().permitAll())
+                .anyRequest().denyAll())
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }

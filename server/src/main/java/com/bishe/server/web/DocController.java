@@ -78,6 +78,9 @@ public class DocController {
         if (spaces.roleOf(spaceId, u.id()) == null) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("msg", "不是该空间成员"));
         }
+        if ("viewer".equals(spaces.roleOf(spaceId, u.id()))) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("msg", "只读成员（viewer）不可创建文档"));
+        }
         String key = repo.create(title, spaceId, kind);
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("docKey", key);
@@ -108,6 +111,9 @@ public class DocController {
         if (spaceId < 0) return ResponseEntity.notFound().build();
         if (spaces.roleOf(spaceId, u.id()) == null) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("msg", "无权访问该空间"));
+        }
+        if ("viewer".equals(spaces.roleOf(spaceId, u.id()))) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("msg", "只读成员（viewer）不可删除文档"));
         }
         boolean ok = repo.delete(docKey);
         return ok ? ResponseEntity.ok(Map.of("deleted", true)) : ResponseEntity.notFound().build();

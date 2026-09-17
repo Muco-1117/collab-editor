@@ -14,12 +14,19 @@ public final class CollabSession {
 
     private final String clientId;
     private final String hostname;
+    /** 空间成员角色：admin/editor 可写；viewer 只读（WS op 帧由 handler 校验）。 */
+    private final String role;
     private final WebSocketSession socket;
     private final Object sendLock = new Object();
 
     public CollabSession(String clientId, String hostname, WebSocketSession socket) {
+        this(clientId, hostname, socket, "editor");
+    }
+
+    public CollabSession(String clientId, String hostname, WebSocketSession socket, String role) {
         this.clientId = clientId;
         this.hostname = hostname;
+        this.role = role == null ? "editor" : role;
         this.socket = socket;
     }
 
@@ -29,6 +36,15 @@ public final class CollabSession {
 
     public String hostname() {
         return hostname;
+    }
+
+    public String role() {
+        return role;
+    }
+
+    /** 是否允许写入（viewer 仅读）。 */
+    public boolean canWrite() {
+        return !"viewer".equals(role);
     }
 
     public boolean isOpen() {
@@ -46,6 +62,16 @@ public final class CollabSession {
             } catch (Exception ignored) {
                 // 对端已不可达/状态机竞态：发送失败不致命（重连增量兜底）
             }
+        }
+    }
+
+    /** 连接被同 clientId 的新会话顶替时调用：尽力关闭底层连接。 */
+    public void forceClose() {
+        try {
+            if (socket.isOpen()) {
+                socket.close(org.springframework.web.socket.CloseStatus.POLICY_VIOLATION);
+            }
+        } catch (Exception ignored) {
         }
     }
 }

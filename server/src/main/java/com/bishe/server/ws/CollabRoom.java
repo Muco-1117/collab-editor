@@ -36,6 +36,11 @@ public final class CollabRoom {
     private final DocState state;
     private final List<Op> ops = new ArrayList<>();
     private final Object opsLock = new Object();
+    /**
+     * applyOp 串行化锁：state.apply(Engine 非线程安全) + ops 追加 + seq 分配 + DB
+     * 落库 + 广播 + 快照必须整体原子，保证「到达序 == rev 序 == 广播序」一致。
+     */
+    private final Object applyLock = new Object();
     private final AtomicLong revSeq = new AtomicLong(0);
     private final ConcurrentHashMap<String, CollabSession> sessions = new ConcurrentHashMap<>();
 
@@ -94,19 +99,21 @@ public final class CollabRoom {
         return revSeq.get();
     }
 
-    /** 接收并应用一条操作：顺序 = 服务端到达序（DB seq），再广播全体。 */
+    /** 接收并应用一条操作：串行执行，顺序 = 服务端到达序（DB seq）= 广播序。 */
     public void applyOp(Op op) {
-        state.apply(op);
-        final long rev;
-        synchronized (opsLock) {
-            ops.add(op);
-            rev = revSeq.incrementAndGet();
-            store.appendOps(docId, List.of(op), rev);
-        }
-        String msg = CollabMessage.applied(rev, op);
-        sessions.values().forEach(s -> s.send(msg));
-        if (rev % SNAPSHOT_INTERVAL == 0) {
-            store.saveSnapshot(docId, rev, OpStore.encodeElements(new ArrayList<>(state.elements().values())));
+        synchronized (applyLock) {
+            state.apply(op);
+            final long rev;
+            synchronized (opsLock) {
+                ops.add(op);
+                rev = revSeq.incrementAndGet();
+                store.appendOps(docId, List.of(op), rev);
+            }
+            String msg = CollabMessage.applied(rev, op);
+            sessions.values().forEach(s -> s.send(msg));
+            if (rev % SNAPSHOT_INTERVAL == 0) {
+                store.saveSnapshot(docId, rev, OpStore.encodeElements(new ArrayList<>(state.elements().values())));
+            }
         }
     }
 
@@ -115,7 +122,13 @@ public final class CollabRoom {
         for (Op op : ops) applyOp(op);
     }
 
-    /** (lastRev, rev] 区间增量 op；lastRev 超窗口（被快照吞没）时返回 null 由调用方回退全量。 */
+    /**
+     * (lastRev, rev] 区间增量 op；lastRev 超窗口（被快照吞没）时返回 null 由调用方回退全量。
+     *
+     * <p>不变式（勿在未同步修改此处逻辑时打破）：ops 列表下标 == seq-1，且 ops 永不修剪
+     * ——即 ops.get(k) 恒为 seq=k+1 的 op。若将来做「日志裁剪/驱逐」，必须改为按 seq
+     * 检索（如 TreeMap<Long,Op>），否则 lastRev 语义会错位。
+     */
     public List<Op> opsAfter(long lastRev) {
         synchronized (opsLock) {
             if (lastRev >= ops.size()) {
@@ -126,7 +139,12 @@ public final class CollabRoom {
     }
 
     public void join(CollabSession s) {
-        sessions.put(s.clientId(), s);
+        CollabSession old = sessions.put(s.clientId(), s);
+        if (old != null && old != s) {
+            // 同一 clientId 已有活跃连接（同账号双标签/断线重连竞态）：顶掉旧连接
+            log.warn("clientId={} 重复加入，顶替旧连接", s.clientId());
+            old.forceClose();
+        }
         broadcastPresence();
     }
 
@@ -134,8 +152,9 @@ public final class CollabRoom {
         return sessions.size();
     }
 
-    public void leave(String clientId) {
-        sessions.remove(clientId);
+    /** 精确移除：仅当 map 中仍是 ses 时才移除（防顶替场景旧连接回删新会话）。 */
+    public void leave(CollabSession ses) {
+        sessions.remove(ses.clientId(), ses);
         broadcastPresence();
     }
 
