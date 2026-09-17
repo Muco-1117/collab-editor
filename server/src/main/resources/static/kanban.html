@@ -2,6 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <title>协同工作台 · 看板</title>
 <script src="/auth.js"></script>
 <style>
@@ -51,6 +52,7 @@
   .col .head { display:flex; align-items:center; gap:4px; padding:2px 4px; }
   .col .title { flex:1; font-weight:600; font-size:14px; outline:none; border-radius:4px; padding:2px 6px; }
   .col .title:hover { background:rgba(30,27,20,.07); }
+  .ccount { font-size:11px; color:var(--mutl); background:rgba(30,27,20,.06); border-radius:999px; padding:1px 8px; flex:none; }
   .col .del-col { border:0; background:none; color:var(--mutl); cursor:pointer; font-size:13px; padding:0 4px; }
   .col .del-col:hover { color:#e5484d; }
   .col .cards { display:flex; flex-direction:column; gap:8px; overflow-y:auto; min-height:20px; flex:1; }
@@ -100,6 +102,15 @@
   .rail a:hover .tip { opacity:1; }
   .rail .ruser { margin-top:auto; }
   main.rail-body { margin-left:56px; display:block; }
+
+  /* —— 在线成员头像群 —— */
+  .who { display:flex; align-items:center; }
+  .who-avatar { width:26px; height:26px; border-radius:50%; color:#fff; font-size:11.5px;
+      font-weight:600; display:flex; align-items:center; justify-content:center;
+      margin-left:-7px; border:2px solid #fff; box-shadow:0 1px 3px rgba(0,0,0,.12);
+      flex:none; }
+  .who-avatar:first-child { margin-left:0; }
+  .who-caption { font-size:11.5px; color:var(--mutl); margin-left:8px; }
 </style>
 </head>
 <body>
@@ -114,6 +125,8 @@
 <main class="rail-body"><header>
   <h1>协同看板</h1>
   <button class="btn" onclick="newBoard()">＋ 新建看板</button>
+  <button class="btn" onclick="showHistory()">📜 历史</button>
+  <span id="who" class="who" title="在线成员"></span>
   <button class="btn primary" id="addColBtn" onclick="btnColumn()" disabled>＋ 添加列</button>
   <span class="tag" id="meTag" style="margin-left:auto"></span>
 </header>
@@ -146,6 +159,29 @@ const clock = () => `${me}:${++lamport}`;
 const log = s => { $('log').style.display = 'block'; $('log').textContent += '> ' + s + '\n'; $('log').scrollTop = 1e9; };
 const stat = t => $('statText').textContent = t;
 const setDot = on => $('dot').className = 'dot ' + (on ? 'on' : 'off');
+/* 在线成员头像群 */
+const whoEls = new Map();
+function whoColor(id) { let h = 0; for (const c of String(id)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return 'hsl(' + (h % 360) + ' 62% 46%)'; }
+function renderWho(clients) {
+  const box = $('who'); if (!box) return;
+  const set = new Set(clients || []);
+  whoEls.forEach((el, id) => { if (!set.has(id)) { el.remove(); whoEls.delete(id); } });
+  set.forEach(id => {
+    if (!whoEls.has(id)) {
+      const s = document.createElement('span');
+      s.className = 'who-avatar';
+      s.textContent = (id === me ? '我' : String(id || '?').slice(0, 1).toUpperCase());
+      s.title = (id === me ? '我' : '成员 ' + id.slice(0, 12));
+      s.style.background = whoColor(id);
+      whoEls.set(id, s);
+      box.appendChild(s);
+    }
+  });
+  let cap = box.querySelector('.who-caption');
+  if (!cap) { cap = document.createElement('span'); cap.className = 'who-caption'; box.appendChild(cap); }
+  cap.textContent = set.size ? set.size + ' 人在线' : '';
+}
+
 
 /* ============ WS ============ */
 function connect(docKey) {
@@ -174,7 +210,7 @@ function onMsg(m) {
       // 自己的 op 也走本地镜像（DELETE 必须本地移除；PUT/ADD 幂等）
       applyRemote(m.op);
       break;
-    case 'presence': stat('rev=' + rev + ' · 在线 ' + (m.members||[]).length + ' 人'); break;
+    case 'presence': stat('rev=' + rev + ' · 在线 ' + ((m.clients||[]).length) + ' 人'); renderWho(m.clients||[]); break;
   }
 }
 
@@ -201,7 +237,7 @@ function ensureCol(eid, f) {
     const el = document.createElement('div');
     el.className = 'col';
     el.dataset.eid = eid;
-    el.innerHTML = '<div class="head"><div class="title" contenteditable="true" spellcheck="false"></div>'
+    el.innerHTML = '<div class="head"><div class="title" contenteditable="true" spellcheck="false"></div><span class="ccount"></span>'
       + '<button class="del-col" title="删除列">✕</button></div>'
       + '<div class="cards"></div><button class="add-card">＋ 添加卡片</button>';
     bindCol(el);
@@ -252,6 +288,7 @@ function updateCardCol(eid, colId) {
   reorderIn(target || null);
   setTimeout(settleOverlaps, 10); // 并发乱序/同 order 时几何自愈
 }
+function countCards() { document.querySelectorAll('.col').forEach(c => { const cc = c.querySelector('.ccount'); if (cc) cc.textContent = c.querySelectorAll('.card-kanban').length; }); }
 function reorderAll() {
   const sortedCols = [...cols.entries()].sort((a,b) => a[1].order - b[1].order || (a[0]<b[0]?-1:1));
   sortedCols.forEach(([eid]) => {
@@ -477,6 +514,41 @@ async function newBoard() {
   await refreshList();
   connect(d.docKey);
 }
+
+/* ============ 历史 / 恢复 ============ */
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function showHistory() {
+  if (!curDoc) { alert('请先打开一份看板'); return; }
+  const h = await (await api('/api/docs/' + curDoc + '/history')).json();
+  const mask = document.createElement('div');
+  mask.className = 'histMask';
+  mask.style.cssText = 'position:fixed; inset:0; background:rgba(20,25,35,.55); display:flex; align-items:center; justify-content:center; z-index:99;';
+  mask.onclick = ev => { if (ev.target === mask) mask.remove(); };
+  const box = document.createElement('div');
+  box.style.cssText = 'background:var(--card); border-radius:14px; padding:18px 22px; width:620px; max-width:92vw; max-height:74vh; overflow:auto; font-size:13px; box-shadow:var(--deep, 0 12px 40px rgba(0,0,0,.3));';
+  box.innerHTML = '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px"><b style="font-size:15px">📜 版本历史 · 当前 rev=' + h.rev + '</b><button class="btn" onclick="this.closest(\'.histMask\').remove()">✕ 关闭</button></div>';
+  const list = document.createElement('div');
+  (h.ops || []).forEach(o => {
+    const row = document.createElement('div');
+    row.style.cssText = 'padding:7px 8px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:9px;';
+    row.innerHTML = '<b>#' + o.seq + '</b><span class="so">' + esc(String(o.created_at || '').replace('T',' ').slice(0,16)) + '</span><span class="so">' + esc(String(o.element_id || '').slice(0,10)) + '.' + esc(o.field || '∅') + '</span><span style="flex:1;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(String(o.value_json || '').replace(/^"|"$/g,'').slice(0,36)) + '</span><button class="btn" style="padding:1px 10px" onclick="restoreRev(' + o.seq + ')">恢复</button>';
+    list.appendChild(row);
+  });
+  if (!h.ops || !h.ops.length) list.innerHTML = '<div class="so">暂无操作记录</div>';
+  box.appendChild(list);
+  mask.appendChild(box);
+  document.body.appendChild(mask);
+}
+async function restoreRev(rev) {
+  if (!confirm('恢复到 rev ' + rev + '？当前内容将被覆盖（在线成员实时看到变化）。')) return;
+  try {
+    const r = await fetch('/api/docs/' + curDoc + '/restore', { method:'POST', headers:{ 'Content-Type':'application/json', Authorization:'Bearer ' + window.auth.token() }, body: JSON.stringify({ rev }) });
+    const j = await r.json();
+    alert(j.msg || ('已恢复到 rev ' + rev));
+    document.querySelectorAll('.histMask').forEach(d => d.remove());
+  } catch (e) { alert('恢复失败: ' + e); }
+}
+
 
 /* boot */
 $('meTag').textContent = '本机 ' + me.slice(0, 6);
