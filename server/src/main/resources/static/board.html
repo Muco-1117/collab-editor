@@ -30,7 +30,20 @@
   .btn:hover { border-color:var(--acc); color:var(--acc); }
   .btn.primary { background:var(--acc); border-color:var(--acc); color:#fff; font-weight:600; }
   .btn.primary:hover { background:var(--acc2); color:#fff; }
-  #board { position:relative; height:calc(100vh - 52px); overflow:hidden;
+  #wrap { display:flex; height:calc(100vh - 49px); }
+  #side { width:264px; border-right:1px solid var(--line); background:var(--card);
+          overflow:auto; padding:14px; }
+  #side h2 { font-size:12px; color:var(--mutl); margin:0 0 8px; font-weight:600; letter-spacing:.4px; }
+  .doc-item { padding:7px 10px; border-radius:7px; cursor:pointer; display:flex;
+              justify-content:space-between; align-items:center; gap:6px; font-size:13.5px; }
+  .doc-item:hover { background:var(--bg); }
+  .doc-item.active { background:var(--accbg); color:var(--acc); font-weight:600; }
+  .doc-item .del { visibility:hidden; border:0; background:none; color:var(--mutl);
+                   cursor:pointer; font-size:15px; padding:0 2px; }
+  .doc-item:hover .del { visibility:visible; }
+  .doc-item .del:hover { color:#e5484d; }
+  .doc-empty { color:var(--mutl); font-size:12.5px; line-height:1.7; padding:4px 10px; }
+  #board { flex:1; position:relative; overflow:hidden;
            background:radial-gradient(circle, rgba(30,27,20,.13) 1px, transparent 1px) 0 0/22px 22px; }
   .card { position:absolute; min-width:90px; min-height:56px; background:var(--card);
           border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow);
@@ -90,11 +103,16 @@
 <main class="rail-body"><header>
   <h1>协同白板</h1>
   <button class="btn primary" onclick="newBoard()">＋ 新建白板</button>
-  <select class="btn" id="boardSel" onchange="connect(this.value)"></select>
   <span class="tag" id="meTag" style="margin-left:auto"></span>
 </header>
+<div id="wrap">
+<aside id="side">
+  <h2>白板文档</h2>
+  <div id="docList"></div>
+</aside>
 <div id="board">
   <div id="hint"><b>双击空白处新建卡片</b>拖动卡片 · 右下角缩放 · 右上角 ✕ 删除 · 双击文字区域编辑</div>
+</div>
 </div>
 <div id="status"><span class="dot off" id="dot"></span><span id="statText">未连接</span></div>
 <div id="log"></div>
@@ -154,7 +172,7 @@ function render(snap) {
     if (el.type === 'CARD') ensureCard(el.id, unwrap(el.fields||{}));
   });
   $('hint').style.display = cards.size ? 'none' : 'block';
-  refreshList();
+  refreshBoard();
 }
 function unwrap(fields) {
   const out = {};
@@ -298,33 +316,55 @@ function applyRemote(op) {
 }
 
 /* ============ 白板列表 ============ */
-async function refreshList() {
+async function refreshBoard() {
   try {
     const sp = sessionStorage.getItem('collab_space');
-    const list = await (await api(sp ? '/api/docs?spaceId=' + sp : '/api/docs')).json();
-    const sel = $('boardSel');
-    sel.innerHTML = '';
+    const url = sp ? '/api/docs?spaceId=' + sp + '&kind=board' : '/api/docs?kind=board';
+    const list = await (await api(url)).json();
+    const lst = $('docList');
+    lst.innerHTML = '';
+    if (!list.length) {
+      const e = document.createElement('div');
+      e.className = 'doc-empty';
+      e.textContent = '还没有白板\n点上方「新建白板」，或直接打开别人的邀请链接';
+      lst.appendChild(e);
+      return;
+    }
     list.forEach(d => {
-      const o = document.createElement('option');
-      o.value = d.doc_key;
-      o.textContent = (d.title || '(未命名)') + ' ' + d.doc_key.slice(0, 6);
-      sel.appendChild(o);
+      const it = document.createElement('div');
+      it.className = 'doc-item' + (curDoc === d.doc_key ? ' active' : '');
+      it.dataset.key = d.doc_key;
+      const name = document.createElement('span');
+      name.textContent = d.title || '(未命名)';
+      name.title = d.updated_at ? '更新于 ' + String(d.updated_at).replace('T', ' ').slice(0, 16) : '';
+      const del = document.createElement('button');
+      del.className = 'del'; del.textContent = '✕'; del.title = '删除白板';
+      del.onclick = async ev => {
+        ev.stopPropagation();
+        if (!confirm('删除白板「' + (d.title || '') + '」？协作数据将一并清除。')) return;
+        await api('/api/docs/' + d.doc_key, { method: 'DELETE' });
+        if (curDoc === d.doc_key) curDoc = null;
+        await refreshBoard();
+      };
+      it.append(name, del);
+      it.onclick = () => { if (curDoc !== d.doc_key) connect(d.doc_key); };
+      lst.appendChild(it);
     });
-    if (!curDoc && list.length) sel.value = list[0].doc_key;
+    if (!curDoc && list.length) connect(list[0].doc_key);
   } catch (e) {}
 }
 async function newBoard() {
   const t = prompt('新白板名称', '白板 ' + new Date().toLocaleTimeString().slice(0,5));
   if (t === null) return;
-  const r = await api('/api/docs', { method:'POST', body: JSON.stringify({ title: t }) });
+  const r = await api('/api/docs', { method:'POST', body: JSON.stringify({ title: t, kind: 'board' }) });
   const d = await r.json();
-  await refreshList();
+  await refreshBoard();
   connect(d.docKey);
 }
 
 /* boot */
 $('meTag').textContent = '本机 ' + me.slice(0, 6);
-refreshList();
+refreshBoard();
 const q = new URLSearchParams(location.search).get('doc');
 if (q) connect(q);
 console.log('board ready');

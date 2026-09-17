@@ -30,7 +30,20 @@
   .btn:hover { border-color:var(--acc); color:var(--acc); }
   .btn.primary { background:var(--acc); border-color:var(--acc); color:#fff; font-weight:600; }
   .btn.primary:hover { background:var(--acc2); color:#fff; }
-  #board { display:flex; gap:14px; align-items:flex-start; overflow-x:auto; padding:20px; min-height:calc(100vh - 52px); }
+  #wrap { display:flex; height:calc(100vh - 49px); }
+  #side { width:264px; border-right:1px solid var(--line); background:var(--card);
+          overflow:auto; padding:14px; }
+  #side h2 { font-size:12px; color:var(--mutl); margin:0 0 8px; font-weight:600; letter-spacing:.4px; }
+  .doc-item { padding:7px 10px; border-radius:7px; cursor:pointer; display:flex;
+              justify-content:space-between; align-items:center; gap:6px; font-size:13.5px; }
+  .doc-item:hover { background:var(--bg); }
+  .doc-item.active { background:var(--accbg); color:var(--acc); font-weight:600; }
+  .doc-item .del { visibility:hidden; border:0; background:none; color:var(--mutl);
+                   cursor:pointer; font-size:15px; padding:0 2px; }
+  .doc-item:hover .del { visibility:visible; }
+  .doc-item .del:hover { color:#e5484d; }
+  .doc-empty { color:var(--mutl); font-size:12.5px; line-height:1.7; padding:4px 10px; }
+  #board { flex:1; display:flex; gap:14px; align-items:flex-start; overflow-x:auto; padding:20px; min-height:calc(100vh - 49px); }
   .col { width:264px; flex:none; background:rgba(30,27,20,.045); border:1px solid rgba(30,27,20,.05);
          border-radius:12px; padding:8px 8px 10px;
          display:flex; flex-direction:column; gap:8px; max-height:calc(100vh - 100px); }
@@ -101,12 +114,17 @@
 <main class="rail-body"><header>
   <h1>协同看板</h1>
   <button class="btn" onclick="newBoard()">＋ 新建看板</button>
-  <select class="btn" id="docSel" onchange="connect(this.value)"></select>
   <button class="btn primary" id="addColBtn" onclick="btnColumn()" disabled>＋ 添加列</button>
   <span class="tag" id="meTag" style="margin-left:auto"></span>
 </header>
+<div id="wrap">
+<aside id="side">
+  <h2>看板文档</h2>
+  <div id="docList"></div>
+</aside>
 <div id="board">
   <div id="hint" style="display:none"><b>先「＋ 添加列」创建第一列</b>拖动卡片换列/排序 · 双击文字编辑 · ✕ 删卡</div>
+</div>
 </div>
 <div id="status"><span class="dot off" id="dot"></span><span id="statText">未连接</span></div>
 <div id="log"></div>
@@ -417,22 +435,44 @@ function applyRemote(op) {
 async function refreshList() {
   try {
     const sp = sessionStorage.getItem('collab_space');
-    const list = await (await api(sp ? '/api/docs?spaceId=' + sp : '/api/docs')).json();
-    const sel = $('docSel');
-    sel.innerHTML = '';
+    const url = sp ? '/api/docs?spaceId=' + sp + '&kind=kanban' : '/api/docs?kind=kanban';
+    const list = await (await api(url)).json();
+    const lst = $('docList');
+    lst.innerHTML = '';
+    if (!list.length) {
+      const e = document.createElement('div');
+      e.className = 'doc-empty';
+      e.textContent = '还没有看板\n点上方「新建看板」，或打开别人的邀请链接';
+      lst.appendChild(e);
+      return;
+    }
     list.forEach(d => {
-      const o = document.createElement('option');
-      o.value = d.doc_key;
-      o.textContent = (d.title || '(未命名)') + ' ' + d.doc_key.slice(0, 6);
-      sel.appendChild(o);
+      const it = document.createElement('div');
+      it.className = 'doc-item' + (curDoc === d.doc_key ? ' active' : '');
+      it.dataset.key = d.doc_key;
+      const name = document.createElement('span');
+      name.textContent = d.title || '(未命名)';
+      name.title = d.updated_at ? '更新于 ' + String(d.updated_at).replace('T', ' ').slice(0, 16) : '';
+      const del = document.createElement('button');
+      del.className = 'del'; del.textContent = '✕'; del.title = '删除看板';
+      del.onclick = async ev => {
+        ev.stopPropagation();
+        if (!confirm('删除看板「' + (d.title || '') + '」？协作数据将一并清除。')) return;
+        await api('/api/docs/' + d.doc_key, { method: 'DELETE' });
+        if (curDoc === d.doc_key) curDoc = null;
+        await refreshList();
+      };
+      it.append(name, del);
+      it.onclick = () => { if (curDoc !== d.doc_key) connect(d.doc_key); };
+      lst.appendChild(it);
     });
-    if (!curDoc && list.length) sel.value = list[0].doc_key;
+    if (!curDoc && list.length) connect(list[0].doc_key);
   } catch (e) {}
 }
 async function newBoard() {
   const t = prompt('新看板名称', '看板 ' + new Date().toLocaleTimeString().slice(0,5));
   if (t === null) return;
-  const r = await api('/api/docs', { method:'POST', body: JSON.stringify({ title: t }) });
+  const r = await api('/api/docs', { method:'POST', body: JSON.stringify({ title: t, kind: 'kanban' }) });
   const d = await r.json();
   await refreshList();
   connect(d.docKey);

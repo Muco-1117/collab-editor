@@ -160,7 +160,7 @@ public class ProductController {
         AuthService.UserPub u = me();
         if (u == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         int mySpaces = spaces.listForUser(u.id()).size();
-        List<Map<String, Object>> mine = docs.listVisible(u.id());
+        List<Map<String, Object>> mine = docs.listVisible(u.id(), null);
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("mySpaces", mySpaces);
         out.put("myDocs", mine.size());

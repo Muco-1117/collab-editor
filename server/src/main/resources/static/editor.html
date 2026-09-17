@@ -366,7 +366,7 @@ $('title').addEventListener('input', () => {
 async function refreshDocs() {
   try {
     const sp = sessionStorage.getItem('collab_space');
-    const r = await api(sp ? '/api/docs?spaceId=' + sp : '/api/docs');
+    const r = await api(sp ? '/api/docs?spaceId=' + sp + '&kind=doc' : '/api/docs?kind=doc');
     const list = await r.json();
     $('docList').innerHTML = '';
     list.forEach(doc => {
@@ -395,7 +395,7 @@ async function refreshDocs() {
 function newDoc() {
   const t = prompt('新文档标题', '新建文档');
   if (t === null) return;
-  api('/api/docs', { method: 'POST', body: JSON.stringify({ title: t }) })
+  api('/api/docs', { method: 'POST', body: JSON.stringify({ title: t, kind: 'doc' }) })
     .then(r => r.json())
     .then(d => { refreshDocs(); connect(d.docKey); });
 }

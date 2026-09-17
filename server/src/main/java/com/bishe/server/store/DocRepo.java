@@ -18,29 +18,34 @@ public class DocRepo {
         this.jdbc = jdbc;
     }
 
-    /** 创建文档，返回新 doc_key。 */
-    public String create(String title, long spaceId) {
+    /** 创建文档，返回新 doc_key。kind: doc|board|kanban */
+    public String create(String title, long spaceId, String kind) {
         String key = java.util.UUID.randomUUID().toString();
-        jdbc.update("INSERT INTO document(doc_key, title, space_id) VALUES(?, ?, ?)", key, title, spaceId);
+        jdbc.update("INSERT INTO document(doc_key, title, kind, space_id) VALUES(?, ?, ?, ?)",
+                key, title, kind == null ? "doc" : kind, spaceId);
         return key;
     }
 
-    /** 指定空间内的文档列表（按更新时间倒序）。 */
-    public List<Map<String, Object>> listBySpace(long spaceId) {
+    /** 指定空间内的文档列表（按更新时间倒序）；kind 为空则全部。 */
+    public List<Map<String, Object>> listBySpace(long spaceId, String kind) {
+        String where = "d.space_id = ?" + (kind == null ? "" : " AND d.kind = ?");
+        Object[] args = kind == null ? new Object[]{spaceId} : new Object[]{spaceId, kind};
         return jdbc.queryForList("""
-                SELECT d.doc_key, d.title, d.created_at, d.updated_at, d.space_id, s.name AS space_name
+                SELECT d.doc_key, d.title, d.kind, d.created_at, d.updated_at, d.space_id, s.name AS space_name
                 FROM document d JOIN space s ON s.id = d.space_id
-                WHERE d.space_id = ? ORDER BY d.updated_at DESC""", spaceId);
+                WHERE %s ORDER BY d.updated_at DESC""".formatted(where), args);
     }
 
-    /** 我能看到的所有空间的文档。 */
-    public List<Map<String, Object>> listVisible(long uid) {
+    /** 我能看到的所有空间的文档；kind 为空时全部。 */
+    public List<Map<String, Object>> listVisible(long uid, String kind) {
+        String where = kind == null ? "1=1" : "d.kind = ?";
+        Object[] params = kind == null ? new Object[]{uid} : new Object[]{uid, kind};
         return jdbc.queryForList("""
-                SELECT d.doc_key, d.title, d.created_at, d.updated_at, d.space_id, s.name AS space_name
+                SELECT d.doc_key, d.title, d.kind, d.created_at, d.updated_at, d.space_id, s.name AS space_name
                 FROM document d
                 JOIN space s ON s.id = d.space_id
                 JOIN space_member sm ON sm.space_id = d.space_id AND sm.user_id = ?
-                ORDER BY d.updated_at DESC""", uid);
+                WHERE %s ORDER BY d.updated_at DESC""".formatted(where), params);
     }
 
     /** 查询单个文档元信息（含空间归属）；不存在返回 null。 */

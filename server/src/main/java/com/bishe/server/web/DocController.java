@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 文档 CRUD（REST）。T0+9：所有操作按空间成员资格过滤。
@@ -36,16 +37,20 @@ public class DocController {
     }
 
     @GetMapping
-    public ResponseEntity<?> list(@RequestParam(value = "spaceId", required = false) Long spaceId) {
+    public ResponseEntity<?> list(@RequestParam(value = "spaceId", required = false) Long spaceId,
+                                  @RequestParam(value = "kind", required = false) String kind) {
         AuthService.UserPub u = me();
         if (u == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        if (kind != null && !Set.of("doc", "board", "kanban").contains(kind)) {
+            return ResponseEntity.badRequest().body(Map.of("msg", "kind 仅支持 doc|board|kanban"));
+        }
         if (spaceId != null) {
             if (spaces.roleOf(spaceId, u.id()) == null) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("msg", "不是该空间成员"));
             }
-            return ResponseEntity.ok(repo.listBySpace(spaceId));
+            return ResponseEntity.ok(repo.listBySpace(spaceId, kind));
         }
-        return ResponseEntity.ok(repo.listVisible(u.id()));
+        return ResponseEntity.ok(repo.listVisible(u.id(), kind));
     }
 
     @PostMapping
@@ -53,6 +58,8 @@ public class DocController {
         AuthService.UserPub u = me();
         if (u == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         String title = body == null ? "" : body.getOrDefault("title", "");
+        String kind = body == null ? "doc" : body.getOrDefault("kind", "doc");
+        if (!Set.of("doc", "board", "kanban").contains(kind)) kind = "doc";
         Long spaceId = null;
         if (body != null && body.get("spaceId") != null) {
             try {
@@ -71,10 +78,11 @@ public class DocController {
         if (spaces.roleOf(spaceId, u.id()) == null) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("msg", "不是该空间成员"));
         }
-        String key = repo.create(title, spaceId);
+        String key = repo.create(title, spaceId, kind);
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("docKey", key);
         out.put("title", title);
+        out.put("kind", kind);
         out.put("spaceId", spaceId);
         return ResponseEntity.ok(out);
     }

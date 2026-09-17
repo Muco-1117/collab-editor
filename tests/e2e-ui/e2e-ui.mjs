@@ -106,7 +106,7 @@ async function newUser(page, uname) {
   await A.waitForSelector('.col .add-card', { timeout: 6000 });
   await A.click('.col .add-card');
   await A.waitForSelector('.card-kanban .body', { timeout: 6000 });
-  const kKey = await A.evaluate(() => document.querySelector('#docSel').value || '');   // 取 A 看板 docKey
+  const kKey = await A.evaluate(() => curDoc || '');   // 取 A 看板 docKey
   step('7 A 建看板并建首列首卡', kKey.length > 0, kKey.slice(0, 8));
   const cardA = A.locator('.card-kanban .body').first();
   await cardA.click();
@@ -115,8 +115,8 @@ async function newUser(page, uname) {
   await A.waitForFunction(() => document.querySelector('.col .title').textContent.length > 0, null, { timeout: 4000 }).catch(() => {});
 
   await B.goto(BASE + '/kanban.html');
-  await B.waitForFunction(() => document.querySelectorAll('#docSel option').length > 0, null, { timeout: 8000 });
-  await B.selectOption('#docSel', kKey);   // A 的看板（同空间可见）
+  await B.waitForFunction(() => document.querySelectorAll('#docList .doc-item').length > 0, null, { timeout: 8000 });
+  await B.click('#docList .doc-item[data-key="' + kKey + '"]');   // A 的看板（同空间可见）
   await B.waitForFunction(() => document.querySelector('#board .card-kanban .body')?.textContent.includes('看板验证卡A'), null, { timeout: 8000 });
   step('7b B 看到 A 的看板卡片实时同步', true);
 
@@ -155,8 +155,8 @@ async function newUser(page, uname) {
   await A.waitForTimeout(500);
   const aliveBefore = await B.evaluate(() => document.querySelectorAll('.card-kanban').length);
   await A.reload();
-  await A.waitForFunction(() => document.querySelectorAll('#docSel option').length > 0, null, { timeout: 8000 });
-  await A.selectOption('#docSel', kKey); // 刷新后重新打开同一看板
+  await A.waitForFunction(() => document.querySelectorAll('#docList .doc-item').length > 0, null, { timeout: 8000 });
+  await A.click('#docList .doc-item[data-key="' + kKey + '"]'); // 刷新后重新打开同一看板
   await A.waitForTimeout(1500);
   const aliveAfter = await A.evaluate(() => document.querySelectorAll('.card-kanban').length);
   step('7e 删除的卡片 B 端消失且 A 刷新后不复活', aliveBefore === aliveAfter && aliveAfter < 2, `${aliveBefore} → ${aliveAfter}`);
@@ -176,12 +176,12 @@ async function newUser(page, uname) {
   await cardBody.dblclick();
   await cardBody.pressSequentially('白板卡片A', { delay: 10 });
   await A.waitForTimeout(500);
-  const bKey = await A.evaluate(() => document.querySelector('#boardSel').value || '');
+  const bKey = await A.evaluate(() => curDoc || '');
   step('8 A 建白板并建首卡', bKey.length > 0, bKey.slice(0, 8));
 
   await B.goto(BASE + '/board.html');
-  await B.waitForFunction(() => document.querySelectorAll('#boardSel option').length > 0, null, { timeout: 8000 });
-  await B.selectOption('#boardSel', bKey);
+  await B.waitForFunction(() => document.querySelectorAll('#docList .doc-item').length > 0, null, { timeout: 8000 });
+  await B.click('#docList .doc-item[data-key="' + bKey + '"]');
   await B.waitForFunction(() => document.querySelector('#board .card .body')?.textContent.includes('白板卡片A'), null, { timeout: 8000 });
   step('8b B 看到 A 的白板卡片实时同步', true);
 
