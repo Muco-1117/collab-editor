@@ -124,6 +124,23 @@
   .tip { margin-top:26px; background:var(--card); border:1px dashed rgba(10,108,218,.4); border-radius:12px;
       padding:13px 16px; font-size:13px; color:var(--mut); }
   .tip a { color:var(--acc); text-decoration:none; }
+
+  /* —— 底部账号用户菜单 —— */
+  .railmenu { position:fixed; left:58px; bottom:14px; z-index:200; width:226px;
+      background:var(--card); border:1px solid var(--line); border-radius:12px;
+      box-shadow:var(--deep, 0 12px 40px rgba(0,0,0,.25)); overflow:hidden;
+      animation:rmpop .14s ease; }
+  @keyframes rmpop { from { opacity:0; transform:translateY(6px);} to { opacity:1; transform:none; } }
+  .rm-head { display:flex; align-items:center; gap:10px; padding:13px 14px; }
+  .rm-avatar { width:34px; height:34px; border-radius:50%; background:var(--acc); color:#fff;
+      display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; flex:none; }
+  .rm-name { font-size:14px; font-weight:600; line-height:1.3; }
+  .rm-sub { font-size:11.5px; color:var(--mutl); }
+  .rm-item { padding:9px 14px; font-size:13px; border-top:1px solid var(--line); color:var(--mut);
+      cursor:pointer; text-decoration:none; display:block; }
+  .rm-item:hover { background:var(--bg); }
+  .rm-item.danger { color:#e5484d; }
+  .rm-item.danger:hover { background:#fef4f4; }
 </style>
 </head>
 <body>
@@ -391,7 +408,42 @@
       });
     });
   }
-  window.openDoc = key => { sessionStorage.setItem('collab_space', ''); location.href = '/editor.html?doc=' + key; };
+  if (new URLSearchParams(location.search).has('profile')) setTimeout(() => { try { openProfile(); } catch (e) {} }, 300);
+window.openDoc = key => { sessionStorage.setItem('collab_space', ''); location.href = '/editor.html?doc=' + key; };
+</script>
+<script>
+
+/* 底部账号键：未登录 → 登录页；已登录 → 用户菜单（资料入口/退出） */
+(function () {
+  const ru = document.getElementById('railUser');
+  if (!ru || !window.auth) return;
+  const esc2 = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const user = window.auth.user() || {};
+  if (!window.auth.token() || !user || !user.username) { return; }
+  ru.setAttribute('href', 'javascript:void(0)');
+  ru.title = '账号：' + (user.nickname || user.username);
+  const close = () => document.querySelectorAll('.railmenu').forEach(x => x.remove());
+  const open = ev => {
+    ev.preventDefault();
+    const exist = document.querySelector('.railmenu');
+    if (exist) { close(); return; }
+    const m = document.createElement('div');
+    m.className = 'railmenu';
+    m.innerHTML = '<div class="rm-head"><span class="rm-avatar">' + esc2((user.nickname || user.username || '?').slice(0, 1).toUpperCase()) + '</span>'
+      + '<div><div class="rm-name">' + esc2(user.nickname || user.username) + '</div>'
+      + '<div class="rm-sub">@' + esc2(user.username) + ' · ' + esc2(user.role || 'editor') + '</div></div></div>'
+      + '<div class="rm-item">我的资料</div>'
+      + '<div class="rm-item danger">退出登录</div>';
+    const done = () => { close(); document.removeEventListener('click', done); };
+    m.addEventListener('click', ev2 => ev2.stopPropagation());
+    setTimeout(() => document.addEventListener('click', done), 0);
+    m.querySelectorAll('.rm-item')[0].onclick = () => { close(); document.removeEventListener('click', done); location.href = '/?profile=1'; };
+    m.querySelectorAll('.rm-item')[1].onclick = () => { close(); document.removeEventListener('click', done); window.auth.clear(); location.href = '/login.html'; };
+    document.body.appendChild(m);
+  };
+  ru.onclick = open;
+})();
+
 </script>
 </body>
 </html>

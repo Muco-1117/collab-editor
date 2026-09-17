@@ -108,7 +108,7 @@
   <a href="/editor.html" ><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg><span class="tip">协同文档</span></a>
   <a href="/board.html" class="active"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/></svg><span class="tip">协同白板</span></a>
   <a href="/kanban.html" ><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="5.2" height="18" rx="1.6"/><rect x="9.4" y="3" width="5.2" height="11" rx="1.6"/><rect x="15.8" y="3" width="5.2" height="15" rx="1.6"/></svg><span class="tip">协同看板</span></a>
-  <a class="ruser" href="/login.html"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span class="tip">账号</span></a>
+  <a class="ruser" id="railUser" href="/login.html"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span class="tip">账号</span></a>
 </div>
 <main class="rail-body"><header>
   <h1>协同白板</h1>
@@ -439,5 +439,39 @@ if (q) connect(q);
 console.log('board ready');
 </script>
 </main>
+<script>
+
+/* 底部账号键：未登录 → 登录页；已登录 → 用户菜单（资料入口/退出） */
+(function () {
+  const ru = document.getElementById('railUser');
+  if (!ru || !window.auth) return;
+  const esc2 = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const user = window.auth.user() || {};
+  if (!window.auth.token() || !user || !user.username) { return; }
+  ru.setAttribute('href', 'javascript:void(0)');
+  ru.title = '账号：' + (user.nickname || user.username);
+  const close = () => document.querySelectorAll('.railmenu').forEach(x => x.remove());
+  const open = ev => {
+    ev.preventDefault();
+    const exist = document.querySelector('.railmenu');
+    if (exist) { close(); return; }
+    const m = document.createElement('div');
+    m.className = 'railmenu';
+    m.innerHTML = '<div class="rm-head"><span class="rm-avatar">' + esc2((user.nickname || user.username || '?').slice(0, 1).toUpperCase()) + '</span>'
+      + '<div><div class="rm-name">' + esc2(user.nickname || user.username) + '</div>'
+      + '<div class="rm-sub">@' + esc2(user.username) + ' · ' + esc2(user.role || 'editor') + '</div></div></div>'
+      + '<div class="rm-item">我的资料</div>'
+      + '<div class="rm-item danger">退出登录</div>';
+    const done = () => { close(); document.removeEventListener('click', done); };
+    m.addEventListener('click', ev2 => ev2.stopPropagation());
+    setTimeout(() => document.addEventListener('click', done), 0);
+    m.querySelectorAll('.rm-item')[0].onclick = () => { close(); document.removeEventListener('click', done); location.href = '/?profile=1'; };
+    m.querySelectorAll('.rm-item')[1].onclick = () => { close(); document.removeEventListener('click', done); window.auth.clear(); location.href = '/login.html'; };
+    document.body.appendChild(m);
+  };
+  ru.onclick = open;
+})();
+
+</script>
 </body>
 </html>

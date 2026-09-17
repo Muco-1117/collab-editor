@@ -65,6 +65,7 @@
     <div class="tip"><span id="switchText">没有账号？</span><a id="switch" href="javascript:void(0)">注册一个</a></div>
   </div>
 <script>
+  if (window.auth && window.auth.token()) { location.replace('/'); }
   const isReg = { v: false };
   const $ = id => document.getElementById(id);
 
