@@ -222,7 +222,7 @@ async function newUser(page, uname) {
   await A.fill('#pfNick', '改名' + ua.slice(0, 4));
   await A.click('#pfSave');
   await A.waitForFunction(() => document.querySelector('#pfMsg').textContent === '已保存', null, { timeout: 6000 });
-  const barNick = await A.locator('#userbar b').innerText();
+  const barNick = await A.locator('#userbar .uname').innerText();
   step('10 个人中心展示资料且改名生效', pfOk && barNick.startsWith('改名'), pfText.replace(/\n+/g, ' ') + ' → ' + barNick);
   await A.screenshot({ path: ART + '/e2e-profile.png' });
 
