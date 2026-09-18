@@ -111,6 +111,27 @@
       flex:none; }
   .who-avatar:first-child { margin-left:0; }
   .who-caption { font-size:11.5px; color:var(--mutl); margin-left:8px; }
+  /* —— 列拖拽排序 / 卡上色 / 右键菜单 —— */
+  .grip-col { cursor:grab; font-size:13px; padding:0 2px; margin-right:4px; user-select:none;
+    flex:none; color:var(--mut); border-radius:4px; line-height:1.2; }
+  .grip-col:hover { background:var(--bg); color:var(--ink); }
+  .grip-col:active { cursor:grabbing; }
+  .col.drag-src { opacity:.45; }
+  .col.drag-zone { outline:2px dashed var(--acc); outline-offset:4px; border-radius:12px; }
+  .card-kanban.sel { outline:2px solid var(--acc); outline-offset:1px; }
+  .ctx { position:fixed; z-index:400; width:max-content; background:var(--card); border:1px solid var(--line);
+    border-radius:10px; box-shadow:0 12px 40px rgba(0,0,0,.22); padding:7px; min-width:156px;
+    animation:rmpop .12s ease; font-size:12.5px; color:var(--ink); }
+  .ctx .ctx-title { font-size:11px; color:var(--mut); padding:2px 8px 5px; font-weight:600; }
+  .swatches { display:flex; gap:5px; align-items:center; }
+  .swatch { width:17px; height:17px; border-radius:50%; border:1.5px solid rgba(0,0,0,.12);
+    cursor:pointer; flex:none; box-sizing:border-box; }
+  .swatch:hover { transform:scale(1.18); border-color:rgba(0,0,0,.3); }
+  .ctx .swatches { padding:3px 8px 7px; display:flex; gap:5px; }
+  .ctx hr { border:0; border-top:1px solid var(--line); margin:4px 2px; }
+  .ctx .ctx-item { padding:7px 8px; border-radius:6px; cursor:pointer; }
+  .ctx .ctx-item:hover { background:var(--bg); }
+  .ctx .ctx-item.danger { color:#e5484d; }
 </style>
 </head>
 <body>
@@ -237,7 +258,7 @@ function ensureCol(eid, f) {
     const el = document.createElement('div');
     el.className = 'col';
     el.dataset.eid = eid;
-    el.innerHTML = '<div class="head"><div class="title" contenteditable="true" spellcheck="false"></div><span class="ccount"></span>'
+    el.innerHTML = '<div class="head"><span class="grip-col" title="按住拖动排序列">⠿</span><div class="title" contenteditable="true" spellcheck="false"></div><span class="ccount"></span>'
       + '<button class="del-col" title="删除列">✕</button></div>'
       + '<div class="cards"></div><button class="add-card">＋ 添加卡片</button>';
     bindCol(el);
@@ -267,6 +288,7 @@ function ensureCard(eid, f) {
     body.className = 'body'; body.contentEditable = true; body.spellcheck = false;
     el.append(grip, del, body);
     bindCard(el, body, del);
+    el.oncontextmenu = ev => cardMenu(ev, eid);
     rec = { el, col: null, order: 0 };
     cards.set(eid, rec);
   }
@@ -274,6 +296,7 @@ function ensureCard(eid, f) {
   if (document.activeElement !== body && f.text != null && body.textContent !== String(f.text)) {
     body.textContent = String(f.text);
   }
+  if (f.color != null) rec.el.style.background = f.color;
   if (f.order != null) rec.order = +f.order;
   updateCardCol(eid, f.column != null ? String(f.column) : null);
   return rec;
@@ -322,6 +345,84 @@ function settleOverlaps() {
   });
 }
 
+/* ============ 列拖拽排序 / 卡上色 / 右键菜单 ============ */
+const PALETTE = ['#ffffff', '#ffd666', '#ff9d8f', '#a8d0ff', '#8de3a5', '#d4a9ff', '#ffb3d4', '#c8cbc3'];
+function sendColor(eid, color) {
+  sendPut(eid, 'CARD', 'color', color);
+  const rec = cards.get(eid);
+  if (rec) rec.el.style.background = color;
+}
+function cardMenu(e, eid) {
+  e.preventDefault(); e.stopPropagation();
+  document.querySelectorAll('.ctx').forEach(x => x.remove());
+  const m = document.createElement('div');
+  m.className = 'ctx';
+  m.style.left = Math.max(6, Math.min(e.clientX, innerWidth - 178)) + 'px';
+  m.style.top = Math.max(6, Math.min(e.clientY, innerHeight - 210)) + 'px';
+  m.innerHTML = '<div class="ctx-title">卡片颜色</div><div class="swatches">'
+    + PALETTE.map(c => '<span class="swatch" data-c="' + c + '" style="background:' + c + '"></span>').join('')
+    + '</div><hr><div class="ctx-item danger">删除卡片</div>';
+  const close = () => { m.remove(); document.removeEventListener('click', close, true); document.removeEventListener('contextmenu', close, true); };
+  m.querySelectorAll('.swatch').forEach(s => s.onclick = ev => {
+    ev.stopPropagation();
+    sendColor(eid, s.getAttribute('data-c'));
+    close();
+  });
+  m.querySelector('.ctx-item').onclick = () => {
+    sendOp({ type: 'DELETE', elementId: eid, elementType: 'CARD', clock: clock() });
+    const rec = cards.get(eid);
+    if (rec) { rec.el.remove(); cards.delete(eid); }
+    reorderAll();
+    close();
+  };
+  document.addEventListener('click', close, true);
+  document.addEventListener('contextmenu', close, true);
+  document.body.appendChild(m);
+}
+
+/* —— 列拖拽（松手重算 order 广播，拖拽过程只动 DOM） —— */
+let colDrag = null;
+function startColDrag(ev, colEl) {
+  if (colDrag) return;
+  ev.preventDefault(); ev.stopPropagation();
+  colDrag = { el: colEl };
+  colEl.classList.add('drag-src');
+  const wrap = $('board');
+  const mv = e2 => {
+    const under = document.elementFromPoint(e2.clientX, e2.clientY);
+    const target = under && under.closest ? under.closest('.col') : null;
+    if (!target || target === colEl) return;
+    colEl._moved = true;
+    document.querySelectorAll('.col.drag-zone').forEach(x => x.classList.remove('drag-zone'));
+    target.classList.add('drag-zone');
+    const others = [...wrap.querySelectorAll('.col')];
+    const ti = others.indexOf(target), ci = others.indexOf(colEl);
+    if (ti < ci) wrap.insertBefore(colEl, target);
+    else wrap.insertBefore(colEl, target.nextElementSibling);
+  };
+  const up = () => {
+    window.removeEventListener('mousemove', mv);
+    window.removeEventListener('mouseup', up);
+    document.querySelectorAll('.col.drag-zone').forEach(x => x.classList.remove('drag-zone'));
+    colEl.classList.remove('drag-src');
+    const moved = !!colEl._moved;
+    colEl._moved = false;
+    colDrag = null;
+    if (!moved) return;
+    [...wrap.querySelectorAll('.col')].forEach((cel, i) => {
+      const rid = cel.dataset.eid;
+      const want = i + 1;
+      if ((cols.get(rid).order || 0) !== want) {
+        cols.get(rid).order = want;
+        sendOp({ type: 'PUT', elementId: rid, elementType: 'COLUMN', field: 'order', value: want, clock: clock() });
+      }
+    });
+    reorderAll();
+  };
+  window.addEventListener('mousemove', mv);
+  window.addEventListener('mouseup', up);
+}
+
 /* ============ 交互 ============ */
 function bindCol(el) {
   const colId = el.querySelector('.title');
@@ -338,6 +439,7 @@ function bindCol(el) {
     sendOp({ type:'DELETE', elementId:id, elementType:'COLUMN', clock:clock() });
   };
   el.querySelector('.add-card').onclick = () => addCard(el);
+  el.querySelector('.grip-col').addEventListener('mousedown', ev => startColDrag(ev, el));
 }
 function addCard(colEl) {
   const colId = colEl.dataset.eid;

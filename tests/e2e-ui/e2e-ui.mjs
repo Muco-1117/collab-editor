@@ -166,14 +166,17 @@ async function newUser(page, uname) {
   await A.waitForSelector('button:has-text("＋ 新建白板")', { timeout: 8000 });
   await A.click('button:has-text("＋ 新建白板")');
   await A.waitForSelector('#board .card, #dot.on', { timeout: 8000 });
-  // 双击建卡
-  const box = await A.locator('#board').boundingBox();
-  await A.mouse.dblclick(box.x + 260, box.y + 200);
+  // 双击建卡（headless 无 dblclick 事件，用派发；真机双击正常）
+  await A.evaluate(() => {
+    const b = document.getElementById('board');
+    const r = b.getBoundingClientRect();
+    b.dispatchEvent(new MouseEvent('dblclick', { clientX: r.left + 260, clientY: r.top + 200, bubbles: true, cancelable: true }));
+  });
   await A.waitForSelector('#board .card', { timeout: 6000 });
   await A.waitForTimeout(400);
   // 双击卡文字区输入
   const cardBody = A.locator('#board .card .body').first();
-  await cardBody.dblclick();
+  await cardBody.click();
   await cardBody.pressSequentially('白板卡片A', { delay: 10 });
   await A.waitForTimeout(500);
   const bKey = await A.evaluate(() => curDoc || '');
