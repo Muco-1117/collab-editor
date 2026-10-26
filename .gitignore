@@ -34,7 +34,8 @@ application-local.properties
 data/uploads/
 
 # 本地 IDE 运行配置、构建缓存和测试证据
-.run/
+.run/*
+!.run/CollabServer-local.run.xml
 .pptx-build/
 artifacts/
 deliverables/

@@ -1,8 +1,21 @@
-# 基于SpringBoot的协同编辑系统设计与实现
+# Collab Editor · 多人实时协同编辑系统
+
+基于 **Spring Boot、Vue 3 和 WebSocket** 的协同文档、白板与看板。支持空间三级角色、实时同步、图片资源、历史回放与恢复、回收站、搜索、统计和多格式导出。
+
+协同引擎采用 Lamport 时钟与元素级 LWW；同一元素的并发修改可能整体覆盖，当前部署以单服务实例为边界。完整实现与限制见[系统架构](docs/architecture.md)。
+
+```powershell
+git clone https://github.com/Muco-1117/collab-editor.git
+Set-Location collab-editor
+```
+
+首次使用从[本地启动指南](docs/local-development.md)开始；架构、API、协议、测试和生产部署见下方文档索引。[贡献指南](CONTRIBUTING.md) · [安全说明](SECURITY.md) · [本次发布验证](docs/github-publication.md)
+
+项目整体尚未指定开源许可证；第三方 UI 来源许可保留于 `frontend/src/styles/vendor/shadcn-vue.LICENSE`。
 
 项目完善记录见 [2026-10-22 第一轮](docs/improvements-20261022.md) 与 [第二轮功能记录](docs/improvements-20261022-round2.md)，IDEA / VS Code 的具体启动步骤见 [本地启动指南](docs/local-development.md)。
 
-本项目按 `D:/bishe/docs/` 中 2026-10-15 更新的开题报告和任务书实现。统一 Java 协同引擎通过 Lamport 时钟、操作 ID、元素级 LWW 与墓碑状态驱动文档、白板、看板，配套 Auth0 java-jwt 认证、空间三级角色、MySQL 日志/快照、版本回放、检索和统计。
+项目围绕协同文档、白板和看板三类应用实现。统一 Java 协同引擎通过 Lamport 时钟、操作 ID、元素级 LWW 与墓碑状态驱动文档、白板、看板，配套 Auth0 java-jwt 认证、空间三级角色、MySQL 日志/快照、版本回放、检索和统计。
 
 文档支持段落和图片的编辑、替换、删除与顺序调整；白板同步卡片和图片的位置、尺寸、层级及引用；看板同步列表、任务、拖拽排序、状态流转和封面图。图片通过 REST 上传，WebSocket 只传引用和元数据，读取权限继承所在空间。
 
@@ -67,7 +80,7 @@ mysql --version
 
 ## 本地启动
 
-项目目录：`D:\bishe\projects\collab-editor`。具体 IDE 步骤见 [在 IDEA 和 VS Code 中启动项目](docs/local-development.md)。本地使用时需 MySQL、后端、前端同时运行；IDEA 和 VS Code 无需连接彼此，前端通过 HTTP/WebSocket 代理访问后端。
+以下命令从克隆后的仓库根目录运行。具体 IDE 步骤见 [在 IDEA 和 VS Code 中启动项目](docs/local-development.md)。本地使用时需 MySQL、后端、前端同时运行；IDEA 和 VS Code 无需连接彼此，前端通过 HTTP/WebSocket 代理访问后端。
 
 已有数据库与 `application-local.yml` 时保留原配置。确认 MySQL 服务已启动，若 `8080` 或 `5173` 已运行本项目，无需重复启动实例。**更新本轮 Java 代码后，在 IDEA 启动或重启 `CollabServer-local`；VS Code 中运行“启动前端（Vue）”，两端就绪后访问或刷新 `http://localhost:5173`**，回收站和导出修复才会由新后端提供。已有 Vite 正在运行时直接复用。本轮不需要重新建库或添加依赖。全新环境按 [部署说明](docs/deployment.md) 初始化 `db/init.sql` 并配置数据库/JWT；不要重建现有开发库。
 
