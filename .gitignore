@@ -47,3 +47,8 @@ deliverables/
 # 自动化运行证据与交付制品中间目录
 tests/e2e-ui/artifacts-vue/
 deliverables/.build/
+
+# 本机论文和答辩材料生成脚本（含个人信息和私有素材路径）
+scripts/build-defense-pptx.mjs
+scripts/build-thesis-docx.py
+scripts/build-thesis-from-template.py

@@ -1,6 +1,6 @@
 # 在 IDEA 和 VS Code 中启动项目
 
-整个项目在 `D:\bishe\projects\collab-editor`。打开这个目录即可，里面的 `engine`、`server` 是同一个 Maven 工程的模块，`frontend` 是 Vue 前端。
+打开克隆后的项目根目录即可，里面的 `engine`、`server` 是同一个 Maven 工程的模块，`frontend` 是 Vue 前端。
 
 本地运行需要 **MySQL、后端、前端同时运行**。IDEA 和 VS Code 不需要连接彼此；浏览器中的前端会通过代理访问后端。可以用 IDEA 跑后端、VS Code 跑前端，也可以只用 VS Code 的两个任务。
 
@@ -12,7 +12,7 @@
 
 ## 启动前确认
 
-1. 在 Windows“服务”中确认 MySQL 正在运行；服务名通常是 `MySQL80`，以本机安装为准。
+1. 在 Windows“服务”中确认 MySQL 正在运行；服务名以本机安装为准。
 2. 已有数据库和 `server/src/main/resources/application-local.yml` 时继续使用现有配置，**不要删除或重建数据库**。
 3. 准备 JDK 17 或更高版本（现有 JDK 21 可以继续使用）、Maven 3.9、Node.js 22 LTS（至少 22.12）或 24 LTS。单独运行 Vite 的最低要求是 Node 18，但当前 Vitest 5 测试工具需要更高版本，完整开发环境按前述版本准备。
 4. 如果后端或前端已经运行且代码未更新，直接打开页面。Java 代码更新后需重启原后端，不额外启动第二个实例；重复启动会占用 `8080` 或 `5173`，脚本会指出冲突，不会关闭原服务。
@@ -36,7 +36,7 @@
 
 ### IDEA
 
-1. 选择“文件 → 打开”，打开 `D:\bishe\projects\collab-editor\pom.xml`，按 Maven 项目打开。也可以直接打开项目目录；无需新建工程。
+1. 选择“文件 → 打开”，打开克隆目录中的 `pom.xml`，按 Maven 项目打开。也可以直接打开项目目录；无需新建工程。
 2. 在“文件 → 项目结构”中为项目选择已安装的 JDK 17 / 21。在 Maven 工具窗口点击“重新加载所有 Maven 项目”，等待依赖导入完成。
 3. 顶部运行配置选择 **`CollabServer-local`**，点击运行。该配置运行 `server` 模块中的 `com.bishe.server.CollabServerApplication`。
 4. 控制台出现 `Started CollabServerApplication` 后，后端才启动完成。MySQL 连接失败时先检查服务和本地配置。
@@ -48,7 +48,7 @@
 | 名称 | `CollabServer-local` |
 | 主类 / Main class | `com.bishe.server.CollabServerApplication` |
 | 模块 / Use classpath of module | `server` |
-| 工作目录 / Working directory | `D:\bishe\projects\collab-editor` |
+| 工作目录 / Working directory | 克隆后的项目根目录 |
 | 程序实参 / Program arguments | `--spring.profiles.active=local --spring.config.additional-location=optional:file:./server/src/main/resources/` |
 
 `local` 和外部配置路径都需要保留。只点击主类旁的三角形、却没有这些参数时，可能读取不到本地数据库密码或 JWT 密钥。
@@ -72,14 +72,14 @@
 终端一：
 
 ```powershell
-Set-Location D:\bishe\projects\collab-editor
+Set-Location <clone-directory>
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-backend.ps1
 ```
 
 终端二：
 
 ```powershell
-Set-Location D:\bishe\projects\collab-editor
+Set-Location <clone-directory>
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-frontend.ps1
 ```
 

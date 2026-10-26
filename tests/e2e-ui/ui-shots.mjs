@@ -1,7 +1,7 @@
 // UI 换装截图：登录页 / 门户（登录态）/ 编辑器 / 看板 / 白板
 import { chromium } from 'playwright';
-const BASE = 'http://localhost:8080';
-const OUT = 'D:/bishe/projects/collab-editor/docs/ui-shots';
+const BASE = process.env.UI_SHOTS_BASE_URL || 'http://localhost:8080';
+const OUT = process.env.UI_SHOTS_OUTPUT_DIR || 'docs/ui-shots';
 import fs from 'fs';
 fs.mkdirSync(OUT, { recursive: true });
 (async () => {

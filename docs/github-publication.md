@@ -18,6 +18,8 @@
 | `npm.cmd test`（frontend） | 20 个测试文件、148 项测试通过 |
 | `npm.cmd run build`（frontend） | Vite 生产构建通过 |
 
-本次未重跑需要 `collab_editor_test` 的服务端全量集成测试、真实多浏览器 E2E 或生产部署。现有文档中的历史验证数字保留原日期，不能视为本次运行结果。运行上述数据库测试前必须确认独立测试库配置，因为测试会重建该库。
+本次补做了 `collab_editor_test` 隔离库上的服务端全量集成测试（126 项）、真实多浏览器 E2E（20/20 步）和构建。E2E 覆盖三角色协同、权限、断线恢复、导出与响应式布局。生产部署仍未验收，因为没有可授权的生产服务器、域名和外部服务配置。
+
+依赖审计：`frontend` 的 `npm audit` 当前为 0 vulnerabilities；升级了 `vite`、`vitest` 及 `source-map-js`。测试 E2E 工程的 `npm audit` 也为 0。
 
 验证环境：Windows、JDK 21.0.10（编译目标 Java 17）、Maven 3.9.14、Node.js 24.14.1。
