@@ -1,0 +1,20 @@
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: "${TEST_DB_URL:${DB_URL:jdbc:mysql://${TEST_DB_HOST:${DB_HOST:localhost}}:${TEST_DB_PORT:${DB_PORT:3306}}/collab_editor_test?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&rewriteBatchedStatements=true&cachePrepStmts=true&prepStmtCacheSize=250&prepStmtCacheSqlLimit=2048}}"
+    username: "${TEST_DB_USER:${DB_USER:root}}"
+    password: "${TEST_DB_PASSWORD:${DB_PASSWORD:}}"
+    hikari:
+      maximum-pool-size: 16
+      minimum-idle: 2
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema-test.sql
+      encoding: UTF-8
+
+app:
+  upload-dir: ./target/test-uploads
+  jwt:
+    secret: test-only-jwt-secret-0123456789abcdef
+    expire-hours: 168

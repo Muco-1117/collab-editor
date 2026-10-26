@@ -18,6 +18,9 @@ public final class AuthTestSupport {
 
     private AuthTestSupport() {}
 
+    public record TestDocument(String username, String token, String docKey, String kind) {
+    }
+
     /** 注册（不存在则注册）并返回登录 token。 */
     public static String token(int port, String username) throws Exception {
         String base = "http://localhost:" + port;
@@ -52,5 +55,26 @@ public final class AuthTestSupport {
     /** 登录响应解析出 token。 */
     public static String tokenFromLogin(String json) throws Exception {
         return M.readTree(json).get("token").asText();
+    }
+
+    /** 注册随机用户并在其默认空间创建一个真实文档。 */
+    public static TestDocument document(int port, String prefix, String kind) throws Exception {
+        String username = prefix + "-" + java.util.UUID.randomUUID().toString().substring(0, 8);
+        String token = token(port, username);
+        String body = "{\"title\":\"自动化测试\",\"kind\":\"" + kind + "\"}";
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:" + port + "/api/docs"))
+                .header("Content-Type", "application/json")
+                .header("Authorization", "Bearer " + token)
+                .timeout(Duration.ofSeconds(5))
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build();
+        HttpResponse<String> response = HttpClient.newHttpClient()
+                .send(request, HttpResponse.BodyHandlers.ofString());
+        JsonNode json = M.readTree(response.body());
+        if (response.statusCode() != 200 || !json.hasNonNull("docKey")) {
+            throw new IllegalStateException("创建测试文档失败(" + response.statusCode() + "): " + response.body());
+        }
+        return new TestDocument(username, token, json.path("docKey").asText(), kind);
     }
 }

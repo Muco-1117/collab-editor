@@ -1,5 +1,7 @@
 server:
   port: 8080
+  tomcat:
+    max-swallow-size: 10MB
 
 spring:
   application:
@@ -7,9 +9,16 @@ spring:
   # 数据库连接（凭据不落 git：本地用 application-local.yml override）
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/collab_editor?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    url: ${DB_URL:jdbc:mysql://localhost:3306/collab_editor?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&rewriteBatchedStatements=true&cachePrepStmts=true&prepStmtCacheSize=250&prepStmtCacheSqlLimit=2048}
     username: ${DB_USER:root}
     password: ${DB_PASSWORD:}
+    hikari:
+      maximum-pool-size: 16
+      minimum-idle: 2
+  servlet:
+    multipart:
+      max-file-size: 8MB
+      max-request-size: 8MB
 
 management:
   endpoints:
@@ -18,8 +27,9 @@ management:
         include: health,info
 
 app:
+  upload-dir: ${UPLOAD_DIR:./data/uploads}
   jwt:
-    secret: ${JWT_SECRET:bishe-collab-dev-secret-change-me-in-prod-0123456789abcdef}
+    secret: ${JWT_SECRET:}
     expire-hours: 168
 
 logging:

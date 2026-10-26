@@ -14,7 +14,8 @@ public final class FieldValue {
     private final LamportClock writtenAt;
 
     public FieldValue(Object value, LamportClock writtenAt) {
-        this.value = Objects.requireNonNull(value, "value");
+        // null 是带时钟的显式清除值，必须保留才能阻止更早的写入在乱序到达时复活字段。
+        this.value = value;
         this.writtenAt = Objects.requireNonNull(writtenAt, "writtenAt");
     }
 
@@ -44,7 +45,8 @@ public final class FieldValue {
         if (!(o instanceof FieldValue that)) {
             return false;
         }
-        return writtenAt.equals(that.writtenAt) && normalize(value).equals(normalize(that.value));
+        return writtenAt.equals(that.writtenAt)
+                && Objects.equals(normalize(value), normalize(that.value));
     }
 
     @Override

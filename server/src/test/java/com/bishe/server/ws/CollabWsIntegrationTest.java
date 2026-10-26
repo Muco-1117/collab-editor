@@ -27,16 +27,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * 3) B 断开期间 A 再发 op → B 重连(lastRev) → 增量补发 incremental
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("local")
+@ActiveProfiles("test")
 class CollabWsIntegrationTest {
 
     @LocalServerPort
     int port;
 
     final ObjectMapper mapper = new ObjectMapper();
-    /** 独立测试文档（每次运行随机，避免库内历史干扰断言）。 */
-    final String testDoc = "itest-" + java.util.UUID.randomUUID().toString().substring(0, 8);
-
     /** 一个测试 WS 客户端：入站消息进 queue。connect 自动带 JWT（无则现场注册）。 */
     static class TestClient {
         final LinkedBlockingQueue<String> inbox = new LinkedBlockingQueue<>();
@@ -97,17 +94,21 @@ class CollabWsIntegrationTest {
 
     @Test
     void twoClientsRealtimeAndIncrementalRestore() throws Exception {
+        AuthTestSupport.TestDocument document = AuthTestSupport.document(port, "ws", "doc");
+        String testDoc = document.docKey();
         TestClient a = new TestClient();
         TestClient b = new TestClient();
+        a.tokenParam = document.token();
+        b.tokenParam = document.token();
         try {
             a.connect(wsUri());
             b.connect(wsUri());
-            a.send(jsonHello("client-a", 0));
+            a.send(jsonHello(testDoc, "client-a", 0));
             JsonNode wa = a.nextOfType("welcome", 5);
             assertEquals("welcome", wa.path("type").asText());
             assertTrue(wa.path("snapshot").isArray(), "welcome 带快照");
 
-            b.send(jsonHello("client-b", 0));
+            b.send(jsonHello(testDoc, "client-b", 0));
             JsonNode wb = b.nextOfType("welcome", 5);
             assertEquals("welcome", wb.path("type").asText());
 
@@ -124,7 +125,7 @@ class CollabWsIntegrationTest {
             // --- 模拟断线：A 断开，B 继续写 ---
             a.close();
             b.send("{\"type\":\"op\",\"op\":{\"type\":\"PUT\",\"elementId\":\"doc-1\","
-                    + "\"elementType\":\"TEXT\",\"field\":\"text\",\"value\":\"第二版\",\"clock\":\"client-b:2\"}}");
+                    + "\"elementType\":\"TEXT\",\"field\":\"text\",\"value\":\"第二版\",\"clock\":\"client-b:1\"}}");
             JsonNode appB2 = b.nextOfType("applied", 5);
             assertEquals("applied", appB2.path("type").asText());
             assertEquals("第二版", appB2.at("/op/value").asText());
@@ -132,8 +133,9 @@ class CollabWsIntegrationTest {
             // --- A 重连：带 lastRev=0+其已知 rev → 增量补发 ---
             int revA = appA.path("rev").asInt();   // A 断开时已知 rev
             TestClient a2 = new TestClient();
+            a2.tokenParam = document.token();
             a2.connect(wsUri());
-            a2.send(jsonHello("client-a", revA));
+            a2.send(jsonHello(testDoc, "client-a", revA));
             JsonNode restore = a2.nextOfType("incremental", 5);
             assertNotNull(restore, "重连应收到补发");
             assertEquals("incremental", restore.path("type").asText(), "重连走增量");
@@ -147,8 +149,8 @@ class CollabWsIntegrationTest {
         }
     }
 
-    private String jsonHello(String clientId, long lastRev) {
-        return "{\"type\":\"hello\",\"docId\":\"" + testDoc + "\",\"clientId\":\"" + clientId
+    private String jsonHello(String docId, String clientId, long lastRev) {
+        return "{\"type\":\"hello\",\"docId\":\"" + docId + "\",\"clientId\":\"" + clientId
                 + "\",\"hostname\":\"" + clientId + "\",\"lastRev\":" + lastRev + "}";
     }
 }

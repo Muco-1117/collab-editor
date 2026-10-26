@@ -25,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * 快照恢复 + 日志回放），断言状态哈希与 rev 与停机前完全一致。
  */
 @SpringBootTest
-@ActiveProfiles("local")
+@ActiveProfiles("test")
 class CollabPersistRestoreTest {
 
     @Autowired

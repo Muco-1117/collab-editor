@@ -14,12 +14,12 @@ import java.util.Map;
 public class AuthController {
 
     private final AuthService svc;
+    private final CurrentUser currentUser;
 
-    public AuthController(AuthService svc) {
+    public AuthController(AuthService svc, CurrentUser currentUser) {
         this.svc = svc;
+        this.currentUser = currentUser;
     }
-
-    private record AuthResp(String token, AuthService.UserPub user) {}
 
     @PostMapping("/register")
     public ResponseEntity<?> register(@RequestBody Map<String, String> body) {
@@ -28,7 +28,9 @@ public class AuthController {
             return ResponseEntity.ok(Map.of("token", svcLogin(body.get("username"), body.get("password")),
                     "user", user, "msg", "注册成功"));
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("msg", e.getMessage()));
+            HttpStatus status = "用户名已存在".equals(e.getMessage())
+                    ? HttpStatus.CONFLICT : HttpStatus.BAD_REQUEST;
+            return ResponseEntity.status(status).body(Map.of("msg", e.getMessage()));
         }
     }
 
@@ -43,7 +45,7 @@ public class AuthController {
 
     @GetMapping("/me")
     public ResponseEntity<?> me() {
-        var u = currentUser();
+        var u = currentUser.get();
         if (u == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("msg", "未登录"));
         }
@@ -53,29 +55,26 @@ public class AuthController {
                 : ResponseEntity.ok(Map.of("user", svc.byIdOrNull(u.id()), "msg", "ok"));
     }
 
-    /** 个人中心：基本信息 + 昵称编辑 + 创作统计 */
-    @GetMapping("/profile")
-    public ResponseEntity<?> profile() {
-        var u = currentUser();
-        if (u == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("msg", "未登录"));
-        return ResponseEntity.ok(Map.of("profile", svc.profile(u.id()), "msg", "ok"));
-    }
-
-    @PutMapping("/profile")
+    /** 仅修改当前用户的显示昵称，登录名与角色不可由此修改。 */
+    @PutMapping("/me")
     public ResponseEntity<?> updateProfile(@RequestBody Map<String, String> body) {
-        var u = currentUser();
-        if (u == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("msg", "未登录"));
+        var user = currentUser.get();
+        if (user == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         try {
-            return ResponseEntity.ok(Map.of("profile", svc.updateNickname(u.id(), body.get("nickname")), "msg", "已保存"));
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("msg", e.getMessage()));
+            return ResponseEntity.ok(Map.of("user", svc.updateNickname(user.id(), body.get("nickname")), "msg", "昵称已更新"));
+        } catch (IllegalArgumentException error) {
+            return ResponseEntity.badRequest().body(Map.of("msg", error.getMessage()));
         }
     }
 
-    private AuthService.UserPub currentUser() {
-        var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || !(auth.getPrincipal() instanceof AuthService.UserPub u)) return null;
-        return u;
+    /** 有效会话换发新 token，旧 token 到期后自然失效。 */
+    @PostMapping("/refresh")
+    public ResponseEntity<?> refresh() {
+        var u = currentUser.get();
+        if (u == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("msg", "未登录"));
+        }
+        return ResponseEntity.ok(Map.of("token", svc.issueToken(u), "user", u));
     }
 
     private String svcLogin(String username, String password) {

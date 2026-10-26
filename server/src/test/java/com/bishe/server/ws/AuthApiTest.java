@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * 3) WS 握手无 token 403；带 token 成功且 welcome
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("local")
+@ActiveProfiles("test")
 class AuthApiTest {
 
     @LocalServerPort
@@ -90,6 +90,24 @@ class AuthApiTest {
                             URI.create(ws)).get(5, java.util.concurrent.TimeUnit.SECONDS);
         });
         assertTrue(ex instanceof java.util.concurrent.ExecutionException, "无 token 握手必须失败，实际: " + ex);
+    }
+
+    @Test
+    void multibytePasswordBoundaryUsesUtf8BytesAndDoesNotAcceptTruncatedSuffixes() throws Exception {
+        String name = "unicode-" + java.util.UUID.randomUUID().toString().substring(0, 8);
+        String password = "密".repeat(24);
+        var json = new com.fasterxml.jackson.databind.ObjectMapper();
+        HttpResponse<String> registered = post("/api/auth/register", json.writeValueAsString(
+                java.util.Map.of("username", name, "password", password)), null);
+        assertEquals(200, registered.statusCode(), registered.body());
+        assertEquals(200, post("/api/auth/login", json.writeValueAsString(
+                java.util.Map.of("username", name, "password", password)), null).statusCode());
+        assertEquals(401, post("/api/auth/login", json.writeValueAsString(
+                java.util.Map.of("username", name, "password", password + "ignored-before")), null).statusCode());
+        HttpResponse<String> rejected = post("/api/auth/register", json.writeValueAsString(
+                java.util.Map.of("username", name + "_2", "password", password + "A")), null);
+        assertEquals(400, rejected.statusCode(), rejected.body());
+        assertTrue(rejected.body().contains("72 字节"));
     }
 
     /* ---------- helpers ---------- */

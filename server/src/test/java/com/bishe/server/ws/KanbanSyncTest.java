@@ -16,40 +16,42 @@ import static org.junit.jupiter.api.Assertions.*;
  * T0+7 验收：看板协同（建列/建卡/写文字/跨列移动/重连快照）。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("local")
+@ActiveProfiles("test")
 class KanbanSyncTest {
 
     @LocalServerPort
     int port;
 
-    final String testDoc = "kanbantest-" + java.util.UUID.randomUUID().toString().substring(0, 8);
-
     @Test
     void columnAndCardSync() throws Exception {
+        AuthTestSupport.TestDocument document = AuthTestSupport.document(port, "kanban", "kanban");
+        String testDoc = document.docKey();
         URI wsUri = URI.create("ws://localhost:" + port + "/ws/collab");
         CollabWsIntegrationTest.TestClient a = new CollabWsIntegrationTest.TestClient();
         CollabWsIntegrationTest.TestClient b = new CollabWsIntegrationTest.TestClient();
+        a.tokenParam = document.token();
+        b.tokenParam = document.token();
         try {
             a.connect(wsUri);
             b.connect(wsUri);
-            a.send(hello("client-a", 0));
+            a.send(hello(testDoc, "ka", 0));
             a.nextOfType("welcome", 5);
-            b.send(hello("client-b", 0));
+            b.send(hello(testDoc, "kb", 0));
             b.nextOfType("welcome", 5);
 
             /* 1) A 建两列：6 条 op（ADD+title+order）×2 */
             String c1 = "col-todo", c2 = "col-done";
-            a.send(addOp(c1, "COLUMN"));
+            a.send(addOp("ka", c1, "COLUMN", 1));
             a.nextOfType("applied", 5);
-            a.send(putOp(c1, "COLUMN", "title", "待办", "c-a:1"));
+            a.send(putOp(c1, "COLUMN", "title", "待办", "ka:2"));
             a.nextOfType("applied", 5);
-            a.send(putOp(c1, "COLUMN", "order", 1, "c-a:2"));
+            a.send(putOp(c1, "COLUMN", "order", 1, "ka:3"));
             a.nextOfType("applied", 5);
-            a.send(addOp(c2, "COLUMN"));
+            a.send(addOp("ka", c2, "COLUMN", 4));
             a.nextOfType("applied", 5);
-            a.send(putOp(c2, "COLUMN", "title", "已完成", "c-a:3"));
+            a.send(putOp(c2, "COLUMN", "title", "已完成", "ka:5"));
             a.nextOfType("applied", 5);
-            a.send(putOp(c2, "COLUMN", "order", 3, "c-a:4"));
+            a.send(putOp(c2, "COLUMN", "order", 3, "ka:6"));
             a.nextOfType("applied", 5);
 
             List<JsonNode> gotB = collect(b, m ->
@@ -58,13 +60,13 @@ class KanbanSyncTest {
 
             /* 2) B 在 c1 建卡片并写文字（4 op） */
             String card = "card-kb";
-            b.send(addOp(card, "CARD"));
+            b.send(addOp("kb", card, "CARD", 1));
             b.nextOfType("applied", 5);
-            b.send(putOp(card, "CARD", "column", c1, "c-b:1"));
+            b.send(putOp(card, "CARD", "column", c1, "kb:2"));
             b.nextOfType("applied", 5);
-            b.send(putOp(card, "CARD", "order", 1, "c-b:2"));
+            b.send(putOp(card, "CARD", "order", 1, "kb:3"));
             b.nextOfType("applied", 5);
-            b.send(putOp(card, "CARD", "text", "写论文", "c-b:3"));
+            b.send(putOp(card, "CARD", "text", "写论文", "kb:4"));
             b.nextOfType("applied", 5);
             JsonNode textA = null;
             long dl = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(6);
@@ -75,8 +77,8 @@ class KanbanSyncTest {
             assertNotNull(textA, "A 收到卡片文字");
 
             /* 3) A 把卡片拖到 c2（跨列） */
-            a.send(putOp(card, "CARD", "column", c2, "c-a:9"));
-            a.send(putOp(card, "CARD", "order", 2.5, "c-a:10"));
+            a.send(putOp(card, "CARD", "column", c2, "ka:7"));
+            a.send(putOp(card, "CARD", "order", 2.5, "ka:8"));
             a.nextOfType("applied", 5);
             a.nextOfType("applied", 5);
             JsonNode moveB = b.nextOfType("applied", 5);
@@ -86,8 +88,9 @@ class KanbanSyncTest {
 
             /* 4) 新客户端 C：快照 = 两列 + 卡片落在 c2 */
             CollabWsIntegrationTest.TestClient c = new CollabWsIntegrationTest.TestClient();
+            c.tokenParam = document.token();
             c.connect(wsUri);
-            c.send(hello("client-c", 0));
+            c.send(hello(testDoc, "kc", 0));
             JsonNode wc = c.nextOfType("welcome", 5);
             int cols = 0;
             String colOf = null;
@@ -117,13 +120,13 @@ class KanbanSyncTest {
         return out;
     }
 
-    private String hello(String clientId, long lastRev) {
-        return "{\"type\":\"hello\",\"docId\":\"" + testDoc + "\",\"clientId\":\"" + clientId
+    private String hello(String docId, String clientId, long lastRev) {
+        return "{\"type\":\"hello\",\"docId\":\"" + docId + "\",\"clientId\":\"" + clientId
                 + "\",\"hostname\":\"" + clientId + "\",\"lastRev\":" + lastRev + "}";
     }
-    private String addOp(String eid, String etype) {
+    private String addOp(String clientId, String eid, String etype, long counter) {
         return "{\"type\":\"op\",\"op\":{\"type\":\"ADD\",\"elementId\":\"" + eid
-                + "\",\"elementType\":\"" + etype + "\",\"clock\":\"c-k:1\"}}";
+                + "\",\"elementType\":\"" + etype + "\",\"clock\":\"" + clientId + ":" + counter + "\"}}";
     }
     private String putOp(String eid, String etype, String field, Object value, String clock) {
         String v = value instanceof String ? "\"" + value + "\"" : String.valueOf(value);

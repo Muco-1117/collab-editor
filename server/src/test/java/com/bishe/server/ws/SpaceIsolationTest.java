@@ -18,10 +18,10 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * T0+9 验收：空间隔离 + 成员邀请。
  * A/B 各自空间互不可见、跨空间读 403；非成员 WS 被拒；
- * 邀请后 B 可读可进；仅 admin 可邀请。
+ * 邀请后 B 可读可进；仅 owner 可邀请，并验证 owner/editor/viewer 权限矩阵。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("local")
+@ActiveProfiles("test")
 class SpaceIsolationTest {
 
     @LocalServerPort
@@ -107,9 +107,9 @@ class SpaceIsolationTest {
         assertTrue(err.path("message").asText().contains("无权"), "错误含“无权”: " + err.path("message").asText());
         noc.close();
 
-        /* 4) 仅空间 admin 可邀请 */
+        /* 4) 仅空间 owner 可邀请 */
         assertEquals(403, call("POST", "/api/spaces/" + sA + "/members", bob.token(),
-                "{\"username\":\"" + eve.name() + "\"}").statusCode(), "非 admin 邀请 403");
+                "{\"username\":\"" + eve.name() + "\"}").statusCode(), "非 owner 邀请 403");
         HttpResponse<String> inv = call("POST", "/api/spaces/" + sA + "/members", alice.token(),
                 "{\"username\":\"" + bob.name() + "\",\"role\":\"editor\"}");
         assertEquals(200, inv.statusCode(), "邀请成员: " + inv.body());
@@ -122,5 +122,34 @@ class SpaceIsolationTest {
         /* 6) 成员列表含两人 */
         String members = call("GET", "/api/spaces/" + sA + "/members", alice.token(), null).body();
         assertTrue(members.contains(alice.name()) && members.contains(bob.name()), "成员列表: " + members);
+
+        /* 7) viewer 可读/回放/进入，但不能创建、恢复或发送 op */
+        HttpResponse<String> viewerInvite = call("POST", "/api/spaces/" + sA + "/members", alice.token(),
+                "{\"username\":\"" + eve.name() + "\",\"role\":\"viewer\"}");
+        assertEquals(200, viewerInvite.statusCode(), "邀请 viewer");
+        assertEquals(200, call("GET", "/api/docs/" + docA, eve.token(), null).statusCode());
+        assertEquals(200, call("GET", "/api/docs/" + docA + "/history", eve.token(), null).statusCode());
+        assertEquals(403, call("POST", "/api/docs/" + docA + "/restore", eve.token(),
+                "{\"rev\":0}").statusCode(), "viewer 不可恢复");
+        assertEquals(403, call("POST", "/api/docs", eve.token(),
+                "{\"title\":\"禁止创建\",\"spaceId\":" + sA + "}").statusCode(), "viewer 不可创建");
+
+        CollabWsIntegrationTest.TestClient viewer = new CollabWsIntegrationTest.TestClient();
+        viewer.tokenParam = eve.token();
+        viewer.connect(URI.create("ws://localhost:" + port + "/ws/collab"));
+        viewer.send("{\"type\":\"hello\",\"docId\":\"" + docA
+                + "\",\"clientId\":\"viewer-client\",\"hostname\":\"viewer\",\"lastRev\":0}");
+        JsonNode viewerWelcome = viewer.nextOfType("welcome", 5);
+        assertEquals("viewer", viewerWelcome.path("role").asText());
+        assertFalse(viewerWelcome.path("canWrite").asBoolean());
+        viewer.send("{\"type\":\"op\",\"op\":{\"type\":\"PUT\",\"elementId\":\"doc-root\","
+                + "\"elementType\":\"DOC\",\"field\":\"title\",\"value\":\"越权\","
+                + "\"clock\":\"viewer-client:1\"}}");
+        JsonNode readOnly = viewer.nextOfType("error", 5);
+        assertEquals("READ_ONLY", readOnly.path("code").asText());
+        viewer.close();
+
+        assertEquals(403, call("DELETE", "/api/docs/" + docA, bob.token(), null).statusCode(),
+                "editor 不可删除文档");
     }
 }

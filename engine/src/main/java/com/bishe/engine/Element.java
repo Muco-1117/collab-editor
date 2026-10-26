@@ -28,14 +28,14 @@ public final class Element {
     public static final String TOMBSTONE_KEY = "#tombstone";
 
     private final String id;
-    private final ElementType type;
-    private final LamportClock rootClock;
+    private ElementType type;
+    private LamportClock rootClock;
     private final Map<String, FieldValue> fields = new LinkedHashMap<>();
 
     public Element(String id, ElementType type, LamportClock rootClock) {
-        this.id = id;
-        this.type = type;
-        this.rootClock = rootClock;
+        this.id = Objects.requireNonNull(id, "id");
+        this.type = Objects.requireNonNull(type, "type");
+        this.rootClock = Objects.requireNonNull(rootClock, "rootClock");
     }
 
     public String id() {
@@ -68,9 +68,53 @@ public final class Element {
         fields.merge(name, new FieldValue(value, clock), FieldValue::mergeLww);
     }
 
-    /** 应用远程元素：按字段 LWW 合并（含墓碑）。 */
+    /**
+     * 合并元素类型声明。正常客户端的同一元素类型恒定；若收到冲突类型，则以
+     * {@code (clock, typeName)} 全序决胜，避免首个到达者决定类型而破坏收敛。
+     */
+    public void mergeIdentity(ElementType remoteType, LamportClock remoteClock) {
+        if (remoteType == null || remoteClock == null) {
+            return;
+        }
+        int byClock = remoteClock.compareTo(rootClock);
+        if (byClock > 0 || (byClock == 0 && remoteType.name().compareTo(type.name()) > 0)) {
+            type = remoteType;
+            rootClock = remoteClock;
+        }
+    }
+
+    /** 应用远程元素：元素类型与全部字段分别按确定性 LWW 规则合并（含墓碑）。 */
     public void merge(Element remote) {
+        if (fields.containsKey("#version") || remote.fields.containsKey("#version")) {
+            if (fields.containsKey("#version") && !remote.fields.containsKey("#version")) return;
+            if (!fields.containsKey("#version") && remote.fields.containsKey("#version")) {
+                type = remote.type; rootClock = remote.rootClock;
+                fields.clear(); fields.putAll(remote.fields); return;
+            }
+            LamportClock localVersion = fields.values().stream().map(FieldValue::writtenAt)
+                    .max(LamportClock::compareTo).orElse(rootClock);
+            LamportClock remoteVersion = remote.fields.values().stream().map(FieldValue::writtenAt)
+                    .max(LamportClock::compareTo).orElse(remote.rootClock);
+            String localId = fields.containsKey("#version") ? String.valueOf(fields.get("#version").value()) : "";
+            String remoteId = remote.fields.containsKey("#version") ? String.valueOf(remote.fields.get("#version").value()) : "";
+            int comparison = remoteVersion.compareTo(localVersion);
+            if (comparison > 0 || (comparison == 0 && remoteId.compareTo(localId) > 0)) {
+                type = remote.type;
+                rootClock = remote.rootClock;
+                fields.clear();
+                fields.putAll(remote.fields);
+            }
+            return;
+        }
+        mergeIdentity(remote.type, remote.rootClock);
         remote.fields.forEach((name, fv) -> fields.merge(name, fv, FieldValue::mergeLww));
+    }
+
+    /** 快照/副本合并用防御性复制，避免两个 DocState 共享同一个可变 Element。 */
+    public Element copy() {
+        Element copy = new Element(id, type, rootClock);
+        copy.fields.putAll(fields);
+        return copy;
     }
 
     /**

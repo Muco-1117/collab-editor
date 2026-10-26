@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * T0+10 验收：历史时间线 / 回放 / 恢复 / Markdown 导出 / 搜索 / 统计。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("local")
+@ActiveProfiles("test")
 class ProductFeatureTest {
 
     @LocalServerPort
@@ -63,10 +63,12 @@ class ProductFeatureTest {
     }
 
     private int write(String token, String docKey, String text, String clock) throws Exception {
+        String clientId = clock.substring(0, clock.lastIndexOf(':'));
         CollabWsIntegrationTest.TestClient c = new CollabWsIntegrationTest.TestClient();
         c.tokenParam = token;
         c.connect(URI.create("ws://localhost:" + port + "/ws/collab"));
-        c.send("{\"type\":\"hello\",\"docId\":\"" + docKey + "\",\"clientId\":\"h1\",\"hostname\":\"t\",\"lastRev\":0}");
+        c.send("{\"type\":\"hello\",\"docId\":\"" + docKey + "\",\"clientId\":\""
+                + clientId + "\",\"hostname\":\"t\",\"lastRev\":0}");
         c.nextOfType("welcome", 5);
         c.send("{\"type\":\"op\",\"op\":{\"type\":\"PUT\",\"elementId\":\"doc-root\",\"elementType\":\"DOC\","
                 + "\"field\":\"text\",\"value\":\"" + text + "\",\"clock\":\"" + clock + "\"}}");
@@ -121,11 +123,15 @@ class ProductFeatureTest {
         assertTrue(findHit(s1, "title"), "标题搜索命中: " + s1);
         JsonNode s2 = mapper.readTree(call("GET", "/api/docs/search?q=" + "第一版", token, null).body());
         assertTrue(findHit(s2, "body"), "正文搜索命中");
+        JsonNode stale = mapper.readTree(call("GET", "/api/docs/search?q=" + "第二版", token, null).body());
+        assertFalse(findHit(stale, "body"), "被恢复覆盖的旧正文不能继续命中");
 
-        /* 7) 统计 */
+        /* 7) 基于操作日志的统计 */
         JsonNode stt = mapper.readTree(call("GET", "/api/stats", token, null).body());
-        assertTrue(stt.path("mySpaces").asInt() >= 1, "我的空间数");
-        assertTrue(stt.path("platform").path("users").asLong() >= 1, "平台用户数");
+        assertTrue(stt.path("spaces").asInt() >= 1, "我的空间数");
+        assertTrue(stt.path("documents").asInt() >= 1, "可见文档数");
+        assertTrue(stt.path("operations").asLong() >= 2, "统计来自操作日志");
+        assertTrue(stt.path("byOperation").isArray(), "包含操作类型聚合");
     }
 
     private boolean findHit(JsonNode arr, String kind) {

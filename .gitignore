@@ -24,7 +24,25 @@ Thumbs.db
 *.log
 logs/
 
-# 本地配置（含数据库口令）
-application-local.yml
 # 本地凭据（含 MySQL 密码，勿提交）
 application-local.yml
+application-local.yaml
+application-local.properties
+**/application-local.yml
+**/application-local.yaml
+**/application-local.properties
+data/uploads/
+
+# 本地 IDE 运行配置、构建缓存和测试证据
+.run/
+.pptx-build/
+artifacts/
+deliverables/
+**/target/
+**/data/uploads/
+**/__pycache__/
+*.pyc
+
+# 自动化运行证据与交付制品中间目录
+tests/e2e-ui/artifacts-vue/
+deliverables/.build/

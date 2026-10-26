@@ -1,0 +1,39 @@
+{
+  "folders": [
+    { "name": "collab-editor", "path": "." }
+  ],
+  "extensions": {
+    "recommendations": ["Vue.volar", "vscjava.vscode-java-pack"]
+  },
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "启动后端（local）",
+        "type": "process",
+        "command": "powershell.exe",
+        "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/scripts/start-backend.ps1"],
+        "options": { "cwd": "${workspaceFolder}" },
+        "isBackground": true,
+        "problemMatcher": [],
+        "presentation": { "reveal": "always", "panel": "dedicated", "group": "collab-dev", "clear": false }
+      },
+      {
+        "label": "启动前端（Vue）",
+        "type": "process",
+        "command": "powershell.exe",
+        "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/scripts/start-frontend.ps1"],
+        "options": { "cwd": "${workspaceFolder}" },
+        "isBackground": true,
+        "problemMatcher": [],
+        "presentation": { "reveal": "always", "panel": "dedicated", "group": "collab-dev", "clear": false }
+      },
+      {
+        "label": "同时启动前后端",
+        "dependsOn": ["启动后端（local）", "启动前端（Vue）"],
+        "dependsOrder": "parallel",
+        "problemMatcher": []
+      }
+    ]
+  }
+}

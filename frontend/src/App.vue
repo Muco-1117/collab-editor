@@ -1,28 +1,53 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, watch } from 'vue'
+import { RouterView } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import ToastHost from './components/ToastHost.vue'
+import { authStore } from './stores/auth.js'
+import { dismiss, toasts } from './stores/toast.js'
 
-const health = ref(null)
-const error = ref('')
+const router = useRouter()
+const route = useRoute()
 
-onMounted(async () => {
-  try {
-    const resp = await fetch('/api/health')
-    health.value = await resp.json()
-  } catch (e) {
-    error.value = String(e)
-  }
-})
+function handleUnauthorized() {
+  const redirect = route.name === 'login' ? undefined : route.fullPath
+  router.replace({ name: 'login', query: redirect ? { redirect } : {} })
+}
+
+onMounted(() => window.addEventListener('collab:unauthorized', handleUnauthorized))
+onBeforeUnmount(() => window.removeEventListener('collab:unauthorized', handleUnauthorized))
+
+watch(
+  () => authStore.state.sessionEpoch,
+  async (epoch) => {
+    if (!authStore.state.sessionChanging) return
+    const redirect = route.name === 'login' ? route.query.redirect : route.fullPath
+    // Tear down sockets, drafts and modal guards before accepting another
+    // account's credentials. A routine token refresh never enters this path.
+    for (const toast of [...toasts]) dismiss(toast.id)
+    await nextTick()
+    if (!(await authStore.resumeStoredSession(epoch))) return
+    try {
+      if (authStore.isAuthenticated.value) {
+        await router.replace({ name: 'dashboard' })
+      } else {
+        await router.replace({
+          name: 'login',
+          query: typeof redirect === 'string' ? { redirect } : {},
+        })
+      }
+    } finally {
+      authStore.finishStoredSession(epoch)
+    }
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
-  <main style="font-family: system-ui, sans-serif; padding: 40px; max-width: 640px; margin: 0 auto">
-    <h1>多人实时协同编辑系统</h1>
-    <p style="color: #666">脚手架已就绪 —— 文档 / 白板 / 看板三应用入口与协同引擎将在后续里程碑接入。</p>
-    <div v-if="health" style="border: 1px solid #ccc; border-radius: 8px; padding: 12px 16px; background: #f6f6f6">
-      <div><strong>后端状态：</strong><span style="color: #0a7d33">{{ health.status }}</span></div>
-      <div><strong>引擎：</strong>{{ health.engine }}</div>
-      <div><strong>时间：</strong>{{ health.time }}</div>
-    </div>
-    <p v-if="error" style="color: #b02a2a">连接后端失败：{{ error }}</p>
-  </main>
+  <div v-if="authStore.state.sessionChanging" class="page-loading" role="status" aria-live="polite">
+    <span>正在同步登录状态</span>
+  </div>
+  <RouterView v-else :key="authStore.state.sessionEpoch" />
+  <ToastHost />
 </template>

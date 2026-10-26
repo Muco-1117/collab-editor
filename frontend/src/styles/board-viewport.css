@@ -1,0 +1,158 @@
+/* View navigation belongs to the whiteboard, not the shared workbench toolbar. */
+.board-editor .board-stage {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  padding-bottom: 62px;
+  overflow: hidden;
+  background: #f6f7f8;
+}
+.board-editor .board-stage .board-scroll {
+  min-width: 0;
+  background: #f6f7f8;
+  overflow-anchor: none;
+  touch-action: pan-x pan-y;
+}
+.board-editor .board-scroll:focus-visible {
+  outline: 2px solid #4263eb;
+  outline-offset: -2px;
+}
+.board-editor .board-plane {
+  position: relative;
+  overflow: hidden;
+}
+.board-editor .board-stage .board-canvas {
+  position: absolute;
+  min-width: 0;
+  min-height: 0;
+  transform-origin: 0 0;
+  background-color: #f6f7f8;
+  background-image: radial-gradient(#cdd4df 0.8px, transparent 0.8px);
+  background-size: 22px 22px;
+}
+.board-editor .board-scroll.pan-mode,
+.board-editor .board-scroll.pan-mode .board-card,
+.board-editor .board-scroll.pan-mode textarea {
+  cursor: grab;
+  touch-action: none;
+}
+.board-editor .board-scroll.panning,
+.board-editor .board-scroll.panning * {
+  cursor: grabbing;
+  user-select: none;
+}
+.board-editor.board-view-only .board-scroll:not(.pan-mode) .board-card {
+  touch-action: pan-x pan-y;
+}
+.board-editor.board-view-only .board-tools {
+  min-height: 37px;
+}
+.board-editor.board-view-only .board-scale {
+  display: inline-flex;
+}
+.board-editor .board-navigation {
+  position: absolute;
+  right: 16px;
+  bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  max-width: calc(100% - 24px);
+  padding: 4px;
+  border: 1px solid #e0e5ee;
+  border-radius: 9px;
+  background: #fff;
+  box-shadow: 0 3px 12px #252a340b;
+  color: #596376;
+}
+.board-editor .board-view-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.board-editor .board-view-button:hover:not(:disabled) {
+  background: #f1f4fb;
+  color: #4263eb;
+}
+.board-editor .board-view-button.active {
+  background: #edf1ff;
+  color: #4263eb;
+}
+.board-editor .board-view-button:disabled {
+  opacity: 0.32;
+  cursor: default;
+}
+.board-editor .board-view-button:focus-visible,
+.board-editor .board-navigation select:focus-visible {
+  outline: 2px solid #4263eb;
+  outline-offset: 1px;
+}
+.board-editor .board-fit-button {
+  width: auto;
+  padding-inline: 7px;
+  font-size: 12px;
+}
+.board-editor .board-navigation select {
+  min-width: 64px;
+  width: 64px;
+  height: 32px;
+  padding: 3px 4px;
+  border: 0;
+  border-radius: 5px;
+  background: #fff;
+  color: #465269;
+  font-size: 12px;
+  cursor: pointer;
+}
+.board-editor .board-navigation-divider {
+  width: 1px;
+  height: 18px;
+  margin-inline: 2px;
+  background: #e9ebef;
+}
+.board-editor .board-navigation-hint {
+  position: absolute;
+  left: 18px;
+  bottom: 24px;
+  margin: 0;
+  color: #8c96a7;
+  font-size: 11px;
+  line-height: 1.5;
+  pointer-events: none;
+}
+@media (max-width: 900px) {
+  .board-editor .board-navigation-hint {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+}
+@media (max-width: 600px) {
+  .board-editor .board-stage {
+    padding-bottom: calc(62px + env(safe-area-inset-bottom));
+  }
+  .board-editor .board-navigation {
+    right: 12px;
+    bottom: calc(10px + env(safe-area-inset-bottom));
+  }
+  .board-editor .board-view-button {
+    width: 34px;
+    height: 34px;
+  }
+  .board-editor .board-fit-button {
+    width: auto;
+  }
+}

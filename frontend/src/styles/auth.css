@@ -1,0 +1,105 @@
+.auth-page {
+  --ink: #252a34;
+  --muted: #707989;
+  --line: #e6e9ef;
+  --line-strong: #dce0e6;
+  --surface-soft: #f7f8fa;
+  --green: #4263eb;
+  --green-dark: #344fc4;
+  --green-soft: #eef2ff;
+  background: #f7f8fa;
+  font-family: 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', system-ui, sans-serif;
+}
+.auth-page .auth-panel {
+  padding: 38px;
+  border-color: #e7eaf0;
+  border-radius: 12px;
+  box-shadow: 0 5px 22px #303a4d05;
+}
+.auth-workbench-mark {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 11px;
+  background: #4263eb;
+  color: #fff;
+}
+.auth-page .auth-brand strong {
+  color: #303a4a;
+  font-weight: 600;
+  font-size: 16px;
+}
+.auth-page .auth-brand span {
+  font-size: 11px;
+}
+.auth-page .auth-brand .auth-workbench-mark {
+  color: #fff;
+}
+.auth-page .auth-heading h1 {
+  font-weight: 600;
+}
+.auth-page .auth-heading p {
+  font-size: 13px;
+}
+.auth-page .segmented {
+  border-color: #e9ecf1;
+  background: #f5f6f9;
+}
+.auth-page .auth-switch button {
+  font-weight: 500;
+}
+.auth-page .auth-switch button.active {
+  color: #4263eb;
+  box-shadow: 0 1px 3px #303a4d0c;
+}
+.auth-page .auth-form > label > span {
+  font-weight: 500;
+  font-size: 12px;
+}
+.auth-page .auth-form input {
+  font-size: 13px;
+}
+.auth-page .auth-form input:focus {
+  border-color: #9aadee;
+  box-shadow: 0 0 0 3px #4263eb0b;
+}
+.auth-page .button {
+  font-weight: 500;
+}
+.auth-page .auth-help {
+  margin: -3px 0 0;
+  color: #8a94a4;
+  font-size: 11px;
+  line-height: 1.7;
+}
+.auth-page .auth-retry {
+  display: grid;
+  gap: 8px;
+  padding: 13px 15px;
+  margin-bottom: 20px;
+  border: 1px solid #e3e8f4;
+  border-radius: 7px;
+  background: #f7f9fd;
+}
+.auth-page .auth-retry p {
+  margin: 0;
+  font-size: 12px;
+  color: #536079;
+}
+.auth-page .auth-retry small {
+  font-size: 11px;
+  line-height: 1.6;
+  color: #707989;
+}
+.auth-page .auth-retry .button {
+  justify-self: start;
+  min-height: 30px;
+  padding: 5px 9px;
+  font-size: 11px;
+}
+@media (max-width: 600px) {
+  .auth-page .auth-panel {
+    padding: 28px 23px;
+  }
+}

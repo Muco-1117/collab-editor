@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,6 +31,15 @@ public class OpStore {
 
     private final JdbcTemplate jdbc;
 
+    /** One already-sequenced row in a room-level durable micro-batch. */
+    public record AppendEntry(Op op, String operationId, Long actorId, long seq) {
+        public AppendEntry {
+            if (op == null) {
+                throw new IllegalArgumentException("op 不能为空");
+            }
+        }
+    }
+
     public OpStore(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
     }
@@ -43,23 +53,63 @@ public class OpStore {
     }
 
     /** 追加一批操作（seq 由调用方提供，从 maxSeq+1 起）。 */
+    @Transactional
     public void appendOps(String docId, List<Op> ops, long nextSeq) {
         if (ops.isEmpty()) {
             return;
         }
-        java.util.concurrent.atomic.AtomicLong seqRef = new java.util.concurrent.atomic.AtomicLong(nextSeq);
+        List<AppendEntry> entries = new ArrayList<>(ops.size());
+        long seq = nextSeq;
+        for (Op op : ops) {
+            entries.add(new AppendEntry(op, op.clock().toString(), null, seq++));
+        }
+        appendBatch(docId, entries);
+    }
+
+    /** 追加单条操作；显式 opId 用于跨重连、跨房间重建幂等。 */
+    @Transactional
+    public void appendOp(String docId, Op op, String opId, long seq) {
+        appendOp(docId, op, opId, null, seq);
+    }
+
+    /** 追加客户端操作并记录操作者；服务端生成的操作 actorId 为 null。 */
+    @Transactional
+    public void appendOp(String docId, Op op, String opId, Long actorId, long seq) {
+        appendBatch(docId, List.of(new AppendEntry(op, operationId(op, opId), actorId, seq)));
+    }
+
+    /** Appends one room micro-batch atomically; either every assigned revision commits or none do. */
+    @Transactional
+    public void appendBatch(String docId, List<AppendEntry> entries) {
+        if (entries.isEmpty()) {
+            return;
+        }
         jdbc.batchUpdate(
-                "INSERT INTO operation_log(doc_id, element_id, field, value_json, clock, seq)"
-                        + " VALUES(?,?,?,?,?,?)",
-                ops, ops.size(), (ps, op) -> {
+                "INSERT INTO operation_log(doc_id, operation_id, actor_id, element_id, element_type,"
+                        + " field, value_json, clock, seq) VALUES(?,?,?,?,?,?,?,?,?)",
+                entries, Math.min(entries.size(), 256), (ps, entry) -> {
+                    Op op = entry.op();
                     ps.setString(1, docId);
-                    ps.setString(2, op.elementId());
+                    ps.setString(2, operationId(op, entry.operationId()));
+                    ps.setObject(3, entry.actorId());
+                    ps.setString(4, op.elementId());
+                    ps.setString(5, op.elementType() == null ? null : op.elementType().name());
                     String field = op.field() == null ? "" : op.field();
-                    ps.setString(3, op.type() == Op.Type.DELETE ? Element.TOMBSTONE_KEY : field);
-                    ps.setString(4, encodeValue(op.value()));
-                    ps.setString(5, String.valueOf(op.type()) + "|" + op.clock());
-                    ps.setLong(6, seqRef.getAndIncrement());
+                    ps.setString(6, op.type() == Op.Type.STATE ? op.field()
+                            : op.type() == Op.Type.DELETE ? Element.TOMBSTONE_KEY : field);
+                    ps.setString(7, encodeValue(op.value()));
+                    ps.setString(8, op.type() + "|" + op.clock());
+                    ps.setLong(9, entry.seq());
                 });
+        // The list's "recently edited" value must follow durable content edits,
+        // not just metadata renames. This shares the append transaction so a
+        // failed write cannot move a document to the top of the list.
+        jdbc.update("UPDATE document SET updated_at=CURRENT_TIMESTAMP"
+                + " WHERE doc_key=? AND deleted_at IS NULL", docId);
+    }
+
+    private static String operationId(Op op, String requested) {
+        return requested == null || requested.isBlank() ? op.clock().toString() : requested;
     }
 
     private static String encodeValue(Object v) {
@@ -76,23 +126,43 @@ public class OpStore {
     }
 
     /** (afterSeq, ...] 区间 op + 服务端 seq（回放按 seq 过滤用）。 */
-    public record LoadOp(long seq, Op op) {}
+    public record LoadOp(long seq, Op op, String operationId) {}
 
     public List<LoadOp> loadOpsAfterWithSeq(String docId, long afterSeq) {
         return jdbc.query(
-                "SELECT seq, element_id, field, value_json, clock FROM operation_log"
+                "SELECT seq, element_id, element_type, field, value_json, clock, operation_id FROM operation_log"
                         + " WHERE doc_id=? AND seq>? ORDER BY seq",
                 (rs, i) -> new LoadOp(rs.getLong(1),
-                        decodeOp(rs.getString(2), rs.getString(3), rs.getString(4), rs.getString(5))),
+                        decodeOp(rs.getString(2), rs.getString(3), rs.getString(4),
+                                rs.getString(5), rs.getString(6)), rs.getString(7)),
                 docId, afterSeq);
     }
 
     /** 最近 N 条 op 摘要（历史时间线）。 */
     public List<Map<String, Object>> opSummaries(String docId, int limit) {
         return jdbc.queryForList(
-                "SELECT seq, element_id, field, value_json, clock, created_at"
-                        + " FROM operation_log WHERE doc_id=? ORDER BY seq DESC LIMIT ?",
+                "SELECT o.seq, o.operation_id, o.actor_id, u.nickname AS actor_name,"
+                        + " o.element_id, o.element_type, o.field, o.value_json, o.clock, o.created_at"
+                        + " FROM operation_log o LEFT JOIN `user` u ON u.id=o.actor_id"
+                        + " WHERE o.doc_id=? ORDER BY o.seq DESC LIMIT ?",
                 docId, limit);
+    }
+
+    /** 文档日志中出现过的最大 Lamport counter；历史恢复据此安全向前推进。 */
+    public long maxLamportCounter(String docId) {
+        return jdbc.query("SELECT clock FROM operation_log WHERE doc_id=?", rs -> {
+            long max = 0;
+            while (rs.next()) {
+                String tag = rs.getString(1);
+                int bar = tag == null ? -1 : tag.indexOf('|');
+                if (bar < 0) {
+                    throw new IllegalStateException("损坏的 clock 标记: " + tag);
+                }
+                long counter = LamportClock.parse(tag.substring(bar + 1)).counter();
+                max = Math.max(max, counter);
+            }
+            return max;
+        }, docId);
     }
 
     /** 写入快照（UPSERT：同 doc 同 rev 幂等覆盖）。 */
@@ -124,16 +194,22 @@ public class OpStore {
 
     /* ---------------- 编解码 ---------------- */
 
-    private static Op decodeOp(String elementId, String field, String valueJson, String clockTag) {
+    private static Op decodeOp(String elementId, String elementType, String field,
+                               String valueJson, String clockTag) {
         int bar = clockTag.indexOf('|');
         if (bar < 0) {
             throw new IllegalStateException("损坏的 clock 标记: " + clockTag);
         }
         Op.Type t = Op.Type.valueOf(clockTag.substring(0, bar));
         LamportClock clock = LamportClock.parse(clockTag.substring(bar + 1));
-        ElementType et = ElementType.TEXT;   // 日志未存 element_type；恢复时类型来自快照会合并
+        // 旧日志没有 element_type：ADD 沿用历史 TEXT 回退；PUT/DELETE 在已有快照元素上
+        // 不声明类型，避免把 CARD/COLUMN 错改成 TEXT。
+        ElementType et = elementType == null || elementType.isBlank()
+                ? null : ElementType.valueOf(elementType);
         return switch (t) {
-            case ADD -> Op.add(elementId, et, clock);
+            case STATE -> Op.state(elementId, et, MAPPER.convertValue(parseValue(valueJson),
+                    new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {}), field, clock);
+            case ADD -> Op.add(elementId, et == null ? ElementType.TEXT : et, clock);
             case PUT -> Op.put(elementId, et, field, parseValue(valueJson), clock);
             case DELETE -> Op.delete(elementId, et, clock);
         };
@@ -196,6 +272,9 @@ public class OpStore {
     }
 
     private static Object toPlain(JsonNode v) {
+        if (v == null || v.isNull()) {
+            return null;
+        }
         if (v.isBoolean()) {
             return v.asBoolean();
         }
@@ -206,6 +285,8 @@ public class OpStore {
         if (v.isFloatingPointNumber()) {
             return v.asDouble();
         }
+        if (v.isObject()) return MAPPER.convertValue(v,
+                new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
         return v.asText();
     }
 }

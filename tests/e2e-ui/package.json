@@ -4,11 +4,14 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node vue-e2e.mjs",
+    "test:vue": "node vue-e2e.mjs",
+    "test:restart": "node restart-smoke.mjs",
+    "test:legacy": "node e2e-ui.mjs"
   },
   "keywords": [],
   "type": "commonjs",
   "dependencies": {
-    "playwright": "^1.52.0"
+    "playwright": "1.55.1"
   }
 }

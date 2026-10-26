@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * T0+5 验收：文档 CRUD REST + 段落级实时同步（双客户端）。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("local")
+@ActiveProfiles("test")
 class DocRestAndParagraphTest {
 
     @LocalServerPort
@@ -30,16 +30,19 @@ class DocRestAndParagraphTest {
     TestRestTemplate rest;
 
     final ObjectMapper mapper = new ObjectMapper();
-    final String testDoc = "doctest-" + java.util.UUID.randomUUID().toString().substring(0, 8);
+    String testDoc;
+    String authToken;
 
     /** 每个测试先注册登录，给所有 REST 请求自动带 Bearer。 */
     @org.junit.jupiter.api.BeforeEach
     void auth() throws Exception {
-        String token = AuthTestSupport.token(port, "doc-" + java.util.UUID.randomUUID().toString().substring(0, 8));
-        rest.getRestTemplate().getInterceptors().add((req, body, exec) -> {
-            req.getHeaders().setBearerAuth(token);
+        AuthTestSupport.TestDocument document = AuthTestSupport.document(port, "paragraph", "doc");
+        authToken = document.token();
+        testDoc = document.docKey();
+        rest.getRestTemplate().setInterceptors(java.util.List.of((req, body, exec) -> {
+            req.getHeaders().setBearerAuth(authToken);
             return exec.execute(req, body);
-        });
+        }));
     }
 
     /* ---------------- REST：文档 CRUD ---------------- */
@@ -87,6 +90,8 @@ class DocRestAndParagraphTest {
         URI wsUri = URI.create("ws://localhost:" + port + "/ws/collab");
         CollabWsIntegrationTest.TestClient a = new CollabWsIntegrationTest.TestClient();
         CollabWsIntegrationTest.TestClient b = new CollabWsIntegrationTest.TestClient();
+        a.tokenParam = authToken;
+        b.tokenParam = authToken;
         try {
             a.connect(wsUri);
             b.connect(wsUri);
@@ -135,6 +140,7 @@ class DocRestAndParagraphTest {
 
             // 重连全量：新客户端 welcome 应含两段
             CollabWsIntegrationTest.TestClient c = new CollabWsIntegrationTest.TestClient();
+            c.tokenParam = authToken;
             c.connect(wsUri);
             c.send(jsonHello(c, "client-c", 0));
             JsonNode wc = c.nextOfType("welcome", 5);

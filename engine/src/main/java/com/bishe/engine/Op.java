@@ -1,6 +1,9 @@
 package com.bishe.engine;
 
 import java.util.Objects;
+import java.util.Map;
+import java.util.LinkedHashMap;
+import java.util.Collections;
 
 /**
  * 操作指令（协议报文的最小载荷建模）。
@@ -15,7 +18,7 @@ import java.util.Objects;
  */
 public final class Op {
 
-    public enum Type {ADD, PUT, DELETE}
+    public enum Type {ADD, PUT, DELETE, STATE}
 
     private final Type type;
     private final String elementId;
@@ -44,6 +47,13 @@ public final class Op {
 
     public static Op delete(String elementId, ElementType type, LamportClock clock) {
         return new Op(Type.DELETE, elementId, type, null, null, clock);
+    }
+
+    /** 协议 v2：完整元素状态，opId 参与等时钟裁决，值限标量元数据。 */
+    public static Op state(String elementId, ElementType type, Map<String, Object> fields,
+                           String opId, LamportClock clock) {
+        return new Op(Type.STATE, elementId, type, opId,
+                Collections.unmodifiableMap(new LinkedHashMap<>(fields)), clock);
     }
 
     public Type type() {

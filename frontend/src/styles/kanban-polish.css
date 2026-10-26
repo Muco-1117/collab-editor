@@ -1,0 +1,146 @@
+.kanban-editor .kanban-tools {
+  flex-wrap: wrap;
+  gap: 10px 14px;
+}
+
+.kanban-editor .kanban-column-navigation,
+.kanban-editor .kanban-card-destination {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: #707989;
+  font-size: 11px;
+}
+
+.kanban-editor .kanban-column-navigation {
+  flex: 0 1 310px;
+  max-width: 100%;
+}
+
+.kanban-editor .kanban-column-navigation > span,
+.kanban-editor .kanban-card-destination > span {
+  flex-shrink: 0;
+}
+
+.kanban-editor .kanban-column-navigation select,
+.kanban-editor .kanban-card-destination select {
+  flex: 1;
+  min-width: 0;
+  width: 0;
+  height: 32px;
+  padding: 4px 8px;
+  border: 1px solid #e3e7ef;
+  border-radius: 5px;
+  color: #596376;
+  background: #fff;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.kanban-editor .kanban-column-navigation select:focus-visible,
+.kanban-editor .kanban-card-destination select:focus-visible {
+  border-color: #8b9fe9;
+  outline: 2px solid #4263eb;
+  outline-offset: 1px;
+}
+
+.kanban-editor .kanban-card-destination {
+  padding: 9px 0 5px;
+  border-top: 1px solid #252a3410;
+}
+
+.kanban-editor .kanban-card-destination select {
+  height: 28px;
+  padding-block: 3px;
+  background: #ffffffb8;
+}
+
+.kanban-editor .kanban-card-destination select:disabled {
+  cursor: default;
+  color: #8d95a3;
+  background: #f7f8fa;
+}
+
+.kanban-editor .kanban-card-actions {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.kanban-editor .kanban-cover-frame {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 5px;
+  background: #eff2f7;
+}
+
+.kanban-editor .kanban-cover-frame .kanban-cover {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  object-fit: cover;
+}
+
+.kanban-editor .kanban-cover-frame .asset-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.kanban-editor .kanban-scroll {
+  background: #f7f8fa;
+  overscroll-behavior: contain;
+}
+
+.kanban-editor .kanban-board {
+  height: 100%;
+}
+
+.kanban-editor .kanban-column {
+  max-height: 100%;
+}
+
+.kanban-editor .kanban-cards {
+  overscroll-behavior: contain;
+}
+
+.kanban-editor .kanban-navigation-notice {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+@media (max-width: 600px) {
+  .kanban-editor .kanban-tools {
+    gap: 7px 10px;
+  }
+
+  .kanban-editor .kanban-column-navigation {
+    order: 3;
+    flex-basis: 100%;
+  }
+
+  .kanban-editor .kanban-column-navigation select {
+    height: 34px;
+  }
+
+  .kanban-editor .kanban-card-destination select {
+    height: 34px;
+  }
+
+  .kanban-editor .kanban-scroll {
+    padding: 12px;
+  }
+
+  .kanban-editor .kanban-column {
+    width: min(292px, calc(100vw - 24px));
+    flex-basis: min(292px, calc(100vw - 24px));
+  }
+}

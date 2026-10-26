@@ -2,7 +2,6 @@ package com.bishe.server.ws;
 
 import com.bishe.server.auth.AuthService;
 import com.bishe.server.auth.JwtUtil;
-import io.jsonwebtoken.Claims;
 import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.http.server.ServerHttpResponse;
 import org.springframework.stereotype.Component;
@@ -44,10 +43,9 @@ public class TokenHandshakeInterceptor implements HandshakeInterceptor {
                 response.setStatusCode(org.springframework.http.HttpStatus.FORBIDDEN);
                 return false;
             }
-            Claims c = jwt.parse(token);
-            long uid = jwt.uidOr(c);
-            AuthService.UserPub user = svc.byId(uid);
-            if (user == null) {
+            JwtUtil.JwtClaims claims = jwt.parse(token);
+            AuthService.UserPub user = svc.byIdOrNull(claims.uid());
+            if (user == null || !user.username().equals(claims.subject())) {
                 response.setStatusCode(org.springframework.http.HttpStatus.FORBIDDEN);
                 return false;
             }

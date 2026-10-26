@@ -10,9 +10,8 @@ import java.util.TreeMap;
 /**
  * 文档状态（副本状态机）—— 协同引擎的宿主。
  *
- * <p>状态 = 元素集合 + 各元素字段级 LWW 视图。apply(Op) 幂等且可乱序：
- * 最终一致性由字段级 LWW（时钟全序）保证——任意两个副本在「收到相同操作集」
- * 之后必然收敛（这就是收敛性测试断言的内容）。
+ * <p>新版 STATE 按完整元素的 (clock, opId) 合并，旧 ADD/PUT/DELETE 可回放。
+ * 元素一旦迁移到新版，旧字段操作不再影响它；同一组有效操作送达后状态收敛。
  */
 public final class DocState {
 
@@ -41,28 +40,51 @@ public final class DocState {
 
     /** 快照恢复用：把已反序列化的元素整体放入状态（不比对时钟，快照即权威）。 */
     public void putRestoredElement(Element el) {
-        elements.put(el.id(), el);
+        elements.put(el.id(), el.copy());
     }
 
     /** 应用一条操作（幂等、可乱序）。 */
     public void apply(Op op) {
         switch (op.type()) {
+            case STATE -> {
+                Element previous = elements.get(op.elementId());
+                // v2 完整状态优先于兼容的 v1 字段日志；迁移后不能混入迟到的字段写。
+                LamportClock version = previous == null || !previous.fields().containsKey("#version")
+                        ? null : previous.fields().get("#version").writtenAt();
+                String previousId = previous != null && previous.fields().containsKey("#version")
+                        ? String.valueOf(previous.fields().get("#version").value()) : "";
+                int order = version == null ? 1 : op.clock().compareTo(version);
+                if (order > 0 || (order == 0 && op.field().compareTo(previousId) > 0)) {
+                    Element replacement = new Element(op.elementId(), op.elementType(), op.clock());
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> values = (Map<String, Object>) op.value();
+                    values.forEach((key, value) -> replacement.putField(key, value, op.clock()));
+                    replacement.putField("#version", op.field(), op.clock());
+                    elements.put(op.elementId(), replacement);
+                }
+            }
             case ADD -> {
                 Element existing = elements.get(op.elementId());
+                if (existing != null && existing.fields().containsKey("#version")) return;
                 if (existing == null) {
                     elements.put(op.elementId(),
                             new Element(op.elementId(), op.elementType(), op.clock()));
+                } else {
+                    existing.mergeIdentity(op.elementType(), op.clock());
                 }
-                // 已存在：ADD 幂等忽略（字段级写由 PUT 自行管）
             }
             case PUT, DELETE -> {
                 Element el = elements.get(op.elementId());
+                if (el != null && el.fields().containsKey("#version")) return;
                 if (el == null) {
                     // 先到后序写 op：自动补建元素（op 携带的类型参与，
                     // 保证与 ADD 先到时创建的 type 一致 → 状态与到达顺序无关）
                     ElementType t = op.elementType() != null ? op.elementType() : ElementType.TEXT;
                     el = new Element(op.elementId(), t, op.clock());
                     elements.put(op.elementId(), el);
+                } else {
+                    // 每条 op 都携带类型声明；冲突时也必须与到达顺序无关。
+                    el.mergeIdentity(op.elementType(), op.clock());
                 }
                 el.putField(op.type() == Op.Type.DELETE ? Element.TOMBSTONE_KEY : op.field(),
                         op.type() == Op.Type.DELETE ? Boolean.TRUE : op.value(), op.clock());
@@ -76,7 +98,7 @@ public final class DocState {
         remote.elements.forEach((id, remoteEl) -> {
             Element local = elements.get(id);
             if (local == null) {
-                elements.put(id, remoteEl);
+                elements.put(id, remoteEl.copy());
             } else {
                 // 字段级 LWW 自行裁决（含迟到远端字段、迟到本地字段）
                 local.merge(remoteEl);
