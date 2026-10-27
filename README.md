@@ -1,6 +1,39 @@
 # Collab Editor · 多人实时协同编辑系统
 
+[![CI](https://github.com/Muco-1117/collab-editor/actions/workflows/ci.yml/badge.svg)](https://github.com/Muco-1117/collab-editor/actions/workflows/ci.yml) [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.3-6DB33F?logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot) [![Vue 3](https://img.shields.io/badge/Vue-3-42b883?logo=vuedotjs&logoColor=white)](https://vuejs.org/) [![E2E](https://img.shields.io/badge/E2E-20%2F20%20passed-2ea44f)](docs/github-publication.md)
+
 基于 **Spring Boot、Vue 3 和 WebSocket** 的协同文档、白板与看板。支持空间三级角色、实时同步、图片资源、历史回放与恢复、回收站、搜索、统计和多格式导出。
+
+## 为什么值得看
+
+这是一个强调实时系统工程细节的全栈作品：浏览器端的文档、白板和看板共用统一元素状态模型，服务端用 WebSocket 广播操作并把日志/快照落到 MySQL；断线后客户端按身份补发未确认操作，服务端按 Lamport 时钟和元素级 LWW 收敛。
+
+招聘者可直接查看：
+
+- [架构与边界](docs/architecture.md)
+- [WebSocket 协议](docs/websocket-protocol.md)
+- [REST API](docs/api-reference.md)
+- [真实多浏览器验收记录](docs/github-publication.md)
+- [服务端协同房间](server/src/main/java/com/bishe/server/ws/CollabRoom.java)
+- [前端协同状态模型](frontend/src/collab/collabState.js)
+
+## 可验证能力
+
+| 招聘关注点 | 仓库中的可验证证据 |
+| --- | --- |
+| 实时协作 | 三角色多浏览器同步、并发修改收敛、30 秒断线恢复 |
+| 协议设计 | Lamport clock、operation id 去重、元素级 LWW、墓碑状态、快照/日志恢复 |
+| 产品完整度 | 文档、白板、看板、图片、历史、回收站、搜索、统计与多格式导出 |
+| 权限与数据边界 | owner/editor/viewer 角色、服务端拒绝越权写入、资源权限继承空间 |
+| 工程交付 | Java 单元/集成测试、Vitest、Playwright E2E、响应式布局验收、CI |
+
+## 界面预览
+
+![协同工作台](docs/ui-shots/3-portal-logged.png)
+![文档编辑器](docs/ui-shots/5-editor.png)
+![协同看板](docs/ui-shots/6-kanban.png)
+
+图片来自仓库内的公开演示截图；完整测试步骤和局限见[发布验证记录](docs/github-publication.md)。
 
 协同引擎采用 Lamport 时钟与元素级 LWW；同一元素的并发修改可能整体覆盖，当前部署以单服务实例为边界。完整实现与限制见[系统架构](docs/architecture.md)。
 
